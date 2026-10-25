@@ -1,0 +1,12 @@
+﻿ipykernel==7.3.0
+matplotlib==3.10.9
+nbconvert==7.17.2
+numpy==2.2.6
+polars==2.0.0
+pyarrow==25.0.1
+pypdf==6.21.2
+pytest==9.1.1
+python-pptx==1.0.2
+reportlab==5.1.0
+scikit-learn==1.7.2
+pymupdf==1.28.2

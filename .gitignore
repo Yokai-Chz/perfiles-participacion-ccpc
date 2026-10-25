@@ -1,0 +1,17 @@
+# Datos originales y procesados (pesan GB; se regeneran con el notebook)
+drive-download-*/
+datos_procesados/
+
+# Entorno y cachés
+src/.venv/
+__pycache__/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Herramienta de terceros y configuración local
+markitdown/
+.claude/settings.local.json
+.claude/jobs/
+
+# Paquetes de entrega (se arman al final, no se versionan)
+*.zip
