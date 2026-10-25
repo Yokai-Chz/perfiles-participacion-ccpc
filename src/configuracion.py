@@ -3,6 +3,7 @@ from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parent.parent
 BRUTOS = RAIZ / "datasets"   # CSV originales, solo lectura (RNF-03)
+ECEG = BRUTOS / "eceg_2020"   # ECEG 2020 de INEGI e INE por sección, una tabla por entidad (spec 003)
 PROCESADOS = RAIZ / "datos_procesados"
 TABLAS = RAIZ / "entrega" / "tablas"                      # toda cifra publicada sale de aquí (RNF-06)
 
@@ -33,7 +34,8 @@ SEDE_CIRCUNSCRIPCION = {1: "Guadalajara", 2: "Monterrey", 3: "Xalapa", 4: "Ciuda
 
 # Carpeta y sufijo de cada corrida. La principal escribe en las carpetas base.
 _CARPETAS = {"entidad": ("", ""), "nacional": ("sensibilidad_nacional", "_nacional"), "ns": ("sensibilidad_ns", "_ns"),
-             "volatilidad": ("sensibilidad_volatilidad", "_volatilidad"), "region": ("sensibilidad_region", "_region")}
+             "volatilidad": ("sensibilidad_volatilidad", "_volatilidad"), "region": ("sensibilidad_region", "_region"),
+             "escolaridad": ("sensibilidad_escolaridad", "_escolaridad")}
 
 
 def rutas(corrida: str = REFERENCIA_PRINCIPAL) -> dict:

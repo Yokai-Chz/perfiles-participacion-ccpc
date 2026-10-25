@@ -82,12 +82,18 @@ def construir(ruta):
     rns = _t("resumen_ns_alto.csv")
     corr = {r["corrida"]: r for r in _t("sensibilidad_corridas.csv").iter_rows(named=True)}
     met = {r["metodo"]: r["ARI_vs_kmeans"] for r in _t("robustez_metodos.csv").iter_rows(named=True)}
-    pv = _t("efecto_primer_voto.csv").filter(pl.col("edad_primera") == 18).drop_nulls("rel_siguiente")
+    pv = _t("efecto_primer_voto_resumen.csv").row(0, named=True)
+    cdmx5 = _t("entidades_composicion.csv").filter(pl.col("EDOCVE") == 9)["5"].item()
     d23 = _t("distritos_composicion_2023.csv")
     pcts23 = [c for c in d23.columns if c.startswith("pct_perfil_")]
     mezcla = d23.filter(pl.max_horizontal(pcts23) < 50).height
     dom = {i: d23.filter(pl.col("perfil_dominante") == i).height for i in m}
     cons = _t("distritos_conservacion.csv").filter(pl.col("AELEC") == 2024).row(0, named=True)
+    # Spec 003: escolaridad del entorno.
+    hay_esc = (TABLAS / "escolaridad_resumen.csv").exists() and "escolaridad" in corr
+    if hay_esc:
+        eres = _t("escolaridad_resumen.csv").row(0, named=True)
+        eper = {r["perfil"]: r for r in _t("escolaridad_por_perfil.csv").iter_rows(named=True)}
 
     h = []
     h += [p("Perfiles ciudadanos de participación", TITULO),
@@ -125,7 +131,7 @@ def construir(ruta):
                 [2.2 * cm, 3 * cm, 3.4 * cm, 4.6 * cm, 3.2 * cm]),
           p("Tabla 1. Participación nacional por elección. Fuente: CCPC, cálculos propios.", PIE),
           figura("participacion_nacional.png", 12.5, "Figura 2. La participación es mayor en las elecciones presidenciales. Esa diferencia no debe confundirse con una tendencia, por eso el análisis mide la participación respecto a un grupo de referencia."),
-          p("<b>Qué no dicen los datos.</b> La fuente no trae escolaridad. Trae el campo SEXO (hombres y mujeres) y no género, por eso usamos «sexo». La unidad territorial es la "
+          p("<b>Qué no dicen los datos.</b> La fuente no trae escolaridad (se aproxima con el Censo 2020, sección 3.6). Trae el campo SEXO (hombres y mujeres) y no género, por eso usamos «sexo». La unidad territorial es la "
             "sección de la credencial y las secciones cambian de límites entre elecciones. El CCPC excluye casillas especiales y residentes en el extranjero, "
             "así que sus cifras no coinciden con los cómputos distritales. El contraste de la participación nacional con las cifras de la plataforma CCPC queda pendiente.")]
 
@@ -166,6 +172,13 @@ def construir(ruta):
             f"Otros algoritmos sobre los mismos rasgos coinciden solo en parte: ARI de {met['Ward (jerárquico)']:.2f} con Ward y de {met['Mezcla gaussiana']:.2f} con una mezcla "
             f"gaussiana, ambos sin pesos. Las celdas no forman grupos muy separados (silhouette de {k5['silhouette_sin_pesos']:.2f}): los perfiles son una partición útil de un continuo "
             "y no tipos naturales. Las figuras de PCA, la comparación entre métodos y las corridas por circunscripción y con volatilidad están en la carpeta <i>entrega/estadisticas</i>.")]
+    if hay_esc:
+        h += [p(f"<b>Escolaridad.</b> Los CCPC no traen escolaridad. La tomamos de las Estadísticas Censales a Escalas Geoelectorales 2020 (INEGI e INE), que dan el grado promedio "
+            f"escolar del Censo 2020 por sección y sexo, en el mismo marco seccional de los CCPC de 2021. Cada celda recibe el de su sexo en las secciones donde vive, ponderado por su "
+            f"lista nominal, y se mide contra su entidad. Es un dato del entorno y no de las personas, porque la fuente no distingue edades. Agregarlo como cuarto rasgo da "
+            f"{corr['escolaridad']['k']} grupos (ARI de {corr['escolaridad']['ARI_vs_principal']:.2f}): los perfiles 1 y 2 se conservan y los de mayor participación se separan por "
+            f"escolaridad. Pero el tipo de sección explica {100 * eres['eta2_tipo_seccion']:.0f} % de su variación, así que en buena parte repite la división urbano-rural. "
+            f"El entorno del perfil 1 tiene {eper[1]['grado_promedio_entorno']:.1f} años de escolaridad promedio y el del perfil 2, {eper[2]['grado_promedio_entorno']:.1f}.")]
 
     h += [p("4. Los cinco perfiles", H1),
           p("Los perfiles se describen con cifras agregadas de la lista nominal de 2024. Conviene leerlos con tres precauciones. Primero, describen <i>grupos de edad y sexo en cada elección</i>, no "
@@ -184,21 +197,25 @@ def construir(ruta):
                 [[f"{i}. {x['nombre']}", ", ".join(x["top_entidades"]),
                   f"{n(sm.filter(pl.col('perfil') == i)['secciones_mayoritarias'][0])} de {n(sm['secciones_total'][0])}"] for i, x in m.items()],
                 [5.6 * cm, 6.4 * cm, 4.8 * cm]),
-          p("Tabla 3. Presencia territorial. Fuente: CCPC, cálculos propios (composición de cada sección con la lista nominal de 2024).", PIE)]
+          p("Tabla 3. Presencia territorial. Fuente: CCPC, cálculos propios (composición de cada sección con la lista nominal de 2024). "
+            + ({0: "", 1: "Una sección no tiene perfil porque toda su lista está en celdas excluidas por tamaño."}.get(
+                sm["secciones_sin_perfil"][0], f"{n(sm['secciones_sin_perfil'][0])} secciones no tienen perfil porque toda su lista está en celdas excluidas por tamaño.")), PIE)]
     lecturas = {
-        1: "Es el perfil más numeroso y el más sensible al tipo de elección: su participación se desploma cuando no hay elección presidencial. Una hipótesis es que el interés se concentra en la contienda nacional.",
+        1: "Es el perfil más numeroso y el más sensible al tipo de elección: su participación se desploma cuando no hay elección presidencial. Una hipótesis es que el interés se concentra en la contienda nacional. Es mayoritariamente joven, pero en entidades donde el voto rural es alto también reúne a adultos urbanos, porque la participación se mide frente a la propia entidad.",
         2: "Es el único perfil con una caída sostenida en las presidenciales. Casi todo su peso está en secciones rurales o mixtas y tres de cada cuatro personas son hombres. Una hipótesis sin verificar es la movilidad laboral, que haría difícil estar en la sección el día de la jornada.",
         3: "Es el núcleo estable de la ciudadanía urbana. No destaca por ningún extremo y por eso mismo es un recurso: participa de forma consistente en todo tipo de elección.",
         4: "Es el grupo que más ha crecido. Sus integrantes son mayoritariamente mujeres de 60 años o más, y su participación en 2024 es de las más altas del conjunto.",
-        5: "Es el perfil de participación más alta y constante. Combina edad adulta madura con una fuerte presencia rural; funciona como referencia de lo que se puede lograr en comunidad.",
+        5: "Es el perfil de participación más alta y constante. Combina edad adulta madura con una fuerte presencia rural; funciona como referencia de lo que se puede lograr en comunidad. "
+           f"En entidades casi totalmente urbanas reúne a adultos de 50 años o más que votan muy por encima de su entidad: en la Ciudad de México es {cdmx5:.0f} % de la lista.",
     }
     for i, x in m.items():
         h += [p(f"Perfil {i}: {x['nombre']}", H2), p(contenido.narrativa(i, m) + " " + lecturas[i])]
 
     h += [p("Primer voto y cohortes", H2),
           p(f"Con la edad exacta se puede seguir a cada generación entre elecciones como un pseudo-panel (no son las mismas personas). Quienes votan por primera vez a los 18 años "
-            f"participan en promedio {100 * pv['rel_primera'].mean():.1f} puntos por encima de su entidad; tres años después, la misma cohorte queda "
-            f"{abs(100 * pv['rel_siguiente'].mean()):.1f} puntos por debajo. El entusiasmo del primer voto existe y se pierde pronto, lo que refuerza las estrategias de los perfiles 1 y 2."),
+            f"participan {100 * pv['rel_a_los_18']:.1f} puntos por encima de su entidad y, tres años después, la misma cohorte queda "
+            f"{abs(100 * pv['rel_tres_anios_despues']):.1f} puntos por debajo (promedio de las {pv['cohortes_con_seguimiento']} cohortes nacidas de "
+            f"{pv['nacimiento_desde']} a {pv['nacimiento_hasta']} que tienen elección tres años después). El entusiasmo del primer voto existe y se pierde pronto, lo que refuerza las estrategias de los perfiles 1 y 2."),
           figura("14_efecto_primer_voto.png", 13, "Figura 6. Participación relativa de cada cohorte en su primera elección y tres años después. Fuente: CCPC, cálculos propios.", ESTADISTICAS),
           p("Perfiles por distrito federal", H2),
           p(f"Para usar los perfiles en campo, la composición de cada sección se suma por distrito federal. En el marco vigente (2023), el perfil 1 es el de mayor peso en {dom[1]} de 300 "
@@ -217,7 +234,7 @@ def construir(ruta):
             "La composición por sección permite elegir dónde aplicarla y medir el resultado.")]
 
     h += [p("6. Limitaciones", H1)] + viñetas([
-        "No hay escolaridad en la fuente; incorporarla con el Censo de INEGI es una línea futura.",
+        "La escolaridad viene del Censo 2020 por sección y sexo, sin edad: describe el entorno de cada grupo, no a sus integrantes, y se aplica a toda la serie 2009 a 2024.",
         "Se usa sexo y no género, porque es lo que registra la fuente.",
         "Los perfiles y las cohortes describen grupos, no personas. En las cohortes el año de nacimiento es aproximado (±1 año) y los efectos de edad, periodo y cohorte no se separan por completo.",
         "Otros algoritmos dan agrupaciones parecidas solo en parte; los perfiles son una partición útil, no tipos naturales.",

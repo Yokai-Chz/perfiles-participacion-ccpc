@@ -46,3 +46,11 @@ def test_la_composicion_de_cada_seccion_suma_uno(tmp_path):
     assert props == pytest.approx([1.0, 1.0]) and sin_perfil == 0 and total == 200
     # La sección 5 de la entidad 1 y la de la entidad 2 no se mezclan (RF-03)
     assert comp.height == 2
+
+
+def test_las_secciones_sin_perfil_cuentan_en_el_total():
+    comp = pl.DataFrame({"EDOCVE": [1, 1], "SECCION": [1, 2], "prop_perfil_1": [0.7, 0.2], "prop_perfil_2": [0.3, 0.8]})
+    sm = per.secciones_mayoritarias(comp, secciones_total=3)
+    assert sm["secciones_mayoritarias"].to_list() == [1, 1]
+    assert sm["secciones_total"].to_list() == [3, 3]
+    assert sm["secciones_sin_perfil"].to_list() == [1, 1]

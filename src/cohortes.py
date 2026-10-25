@@ -77,6 +77,22 @@ def efecto_primer_voto(exacta: pl.DataFrame) -> pl.DataFrame:
     return salida.sort("nacimiento")
 
 
+def resumen_primer_voto(efecto: pl.DataFrame) -> pl.DataFrame:
+    """Promedios simples entre cohortes que votaron por primera vez a los 18 años.
+
+    Las cifras «con seguimiento» usan solo las cohortes que tienen elección tres años después, para comparar
+    los mismos grupos antes y después. Se reporta también la media de todas las cohortes de 18 años.
+    """
+    a18 = efecto.filter(pl.col("edad_primera") == PRIMER_VOTO[0])
+    con = a18.drop_nulls("rel_siguiente")
+    return pl.DataFrame({
+        "cohortes_con_seguimiento": [con.height],
+        "nacimiento_desde": [con["nacimiento"].min()], "nacimiento_hasta": [con["nacimiento"].max()],
+        "rel_a_los_18": [con["rel_primera"].mean()], "rel_tres_anios_despues": [con["rel_siguiente"].mean()],
+        "cohortes_de_18_total": [a18.height], "rel_a_los_18_todas": [a18["rel_primera"].mean()],
+    })
+
+
 def cohortes_por_perfil(datos_ultima: pl.LazyFrame, asig: pl.DataFrame) -> pl.DataFrame:
     """Porcentaje de la lista nominal de la última elección de cada perfil que pertenece a cada cohorte quinquenal (RF-08)."""
     ultima = ELECCIONES[-1]

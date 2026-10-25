@@ -266,7 +266,8 @@ def rasgos_por_perfil():
 def robustez():
     m, s = _t("robustez_metodos.csv"), _t("sensibilidad_corridas.csv")
     etiquetas = {"ns": "Sin secciones con NS alto", "volatilidad": "Con volatilidad (4 rasgos)",
-                 "region": "Por circunscripción", "nacional": "Referencia nacional"}
+                 "region": "Por circunscripción", "nacional": "Referencia nacional",
+                 "escolaridad": "Con escolaridad del entorno"}
     filas = ([(f"{r['metodo']}, sin pesos", r["ARI_vs_kmeans"], 1) for r in m.iter_rows(named=True)]
              + [(f"{etiquetas[r['corrida']]} (k={r['k']})", r["ARI_vs_principal"], 2) for r in s.iter_rows(named=True)])
     filas = sorted(filas, key=lambda f: f[1])
@@ -465,6 +466,46 @@ def distritos_dominante():
     _guardar(fig, "19_distritos_perfil_dominante.png", sub)
 
 
+def escolaridad_perfil():
+    d = _t("escolaridad_por_perfil.csv").sort("perfil")
+    fig, (a1, a2) = plt.subplots(1, 2, figsize=(8.4, 3.2), dpi=200, sharey=True)
+    etiquetas = [_nombre_perfil(p) for p in d["perfil"]]
+    for ax, col, titulo, formato in [(a1, "grado_promedio_entorno", "Grado promedio escolar (años)", "{:.1f}"),
+                                     (a2, "pct_posbasica_entorno", "% de 18 años o más con posbásica", "{:.0f} %")]:
+        barras = ax.barh(etiquetas, d[col], color=[SERIE[p] for p in d["perfil"]], height=0.6)
+        for b, v in zip(barras, d[col]):
+            ax.text(v * 1.01, b.get_y() + b.get_height() / 2, formato.format(v), va="center", fontsize=8)
+        ax.set_title(titulo, loc="left", fontsize=9.5)
+        ax.set_xlim(0, d[col].max() * 1.18)
+        _limpiar(ax, "x")
+    a1.invert_yaxis()
+    a1.tick_params(axis="y", labelsize=8)
+    sub = "Censo 2020 por sección (ECEG 2020, INEGI e INE), ponderado por la lista nominal 2021 de cada celda. Es el entorno, no las personas."
+    _titulo(fig, "Escolaridad del entorno de cada perfil", sub)
+    _guardar(fig, "20_escolaridad_por_perfil.png", sub)
+
+
+def cruce_escolaridad():
+    d = _t("sensibilidad_cruce_escolaridad.csv")
+    k1, k2 = int(d["perfil"].max()), int(d["perfil_otra"].max())
+    matriz = np.zeros((k1, k2))
+    for r in d.iter_rows(named=True):
+        matriz[r["perfil"] - 1, r["perfil_otra"] - 1] = r[f"LN_{ELECCIONES[-1]}"]
+    matriz = 100 * matriz / matriz.sum(axis=1, keepdims=True)
+    fig, ax = plt.subplots(figsize=(7.2, 3.8), dpi=200)
+    ax.imshow(matriz, cmap=SECUENCIAL, vmin=0, vmax=100, aspect="auto")
+    for i in range(k1):
+        for j in range(k2):
+            ax.text(j, i, f"{matriz[i, j]:.0f}", ha="center", va="center", fontsize=8.5, color="white" if matriz[i, j] > 55 else TINTA)
+    ax.set_yticks(range(k1), [_nombre_perfil(p) for p in range(1, k1 + 1)], fontsize=8)
+    ax.set_xticks(range(k2), [f"Grupo {j + 1}" for j in range(k2)])
+    ax.set_xlabel("Grupo de la corrida con escolaridad (numerado por nivel de participación)", fontsize=8)
+    ax.tick_params(length=0)
+    sub = "% de la lista nominal 2024 de cada perfil principal que cae en cada grupo de la corrida con escolaridad (cada fila suma 100)."
+    _titulo(fig, "Perfiles con y sin escolaridad", sub)
+    _guardar(fig, "21_cruce_escolaridad.png", sub)
+
+
 FIGURAS = [piramide, participacion_tipo, participacion_entidad, curva_edad, distribucion_ns, distribucion_rasgos,
            seleccion_k, pca_varianza, pca_perfiles, rasgos_por_perfil, robustez, cruces,
            cohortes_trayectoria, primer_voto, cohortes_perfil, distritos_rasgos, distritos_heatmap, circunscripciones,
@@ -475,4 +516,7 @@ def generar_todo() -> list[str]:
     ESTADISTICAS.mkdir(parents=True, exist_ok=True)
     for f in FIGURAS:
         f()
+    if (ESTADISTICAS.parent / "tablas" / "escolaridad_por_perfil.csv").exists():   # spec 003: solo con la ECEG 2020
+        escolaridad_perfil()
+        cruce_escolaridad()
     return sorted(p.name for p in ESTADISTICAS.glob("*.png"))

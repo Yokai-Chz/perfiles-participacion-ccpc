@@ -22,8 +22,10 @@ def volatilidad(ancha: pl.DataFrame) -> np.ndarray:
     return _rel(ancha).std(axis=1)
 
 
-def matriz_rasgos(ancha: pl.DataFrame, con_volatilidad: bool = False) -> np.ndarray:
+def matriz_rasgos(ancha: pl.DataFrame, con_volatilidad: bool = False, extras: tuple[str, ...] = ()) -> np.ndarray:
     """Tres rasgos que separan el nivel de la forma en el tiempo (RF-07), y la volatilidad si se pide.
+
+    `extras`: columnas de `ancha` que se agregan tal cual como rasgos (spec 003: `esc_rel`).
 
     nivel: participación relativa media. brecha: media en presidenciales menos media en intermedias.
     tendencia: pendiente de la participación relativa por elección.
@@ -35,6 +37,7 @@ def matriz_rasgos(ancha: pl.DataFrame, con_volatilidad: bool = False) -> np.ndar
     columnas = [rel.mean(axis=1), rel[:, pres].mean(axis=1) - rel[:, inter].mean(axis=1), rel @ x / (x ** 2).sum()]
     if con_volatilidad:
         columnas.append(rel.std(axis=1))
+    columnas += [ancha[c].to_numpy() for c in extras]
     return np.column_stack(columnas)
 
 

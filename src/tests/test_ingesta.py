@@ -38,3 +38,12 @@ def test_escribe_un_parquet_por_anio_con_la_columna_de_eleccion(tmp_path):
     destino.mkdir()
     ingesta.escribir_parquet_por_anio(ingesta.listar_por_anio(tmp_path / "crudos"), destino)
     assert pl.read_parquet(destino / "ccpc_2021.parquet")["AELEC"].to_list() == [2021]
+
+
+def test_solo_se_listan_los_csv_de_los_conteos(tmp_path):
+    (tmp_path / "ccpc").mkdir()
+    (tmp_path / "ccpc" / "datosabiertos_deceyec_conteoscensales2021_ags.csv").write_text("x")
+    (tmp_path / "eceg_2020").mkdir()
+    (tmp_path / "eceg_2020" / "INE_SECCION_2020.csv").write_text("x")
+    assert {a: [r.name for r in rs] for a, rs in ingesta.listar_por_anio(tmp_path).items()} == {
+        2021: ["datosabiertos_deceyec_conteoscensales2021_ags.csv"]}

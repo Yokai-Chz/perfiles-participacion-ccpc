@@ -100,3 +100,10 @@ def test_metodos_alternativos_coinciden_en_datos_separables():
     comparacion, bic, _ = seg.comparar_metodos(Z, etiquetas, 4, 1)
     assert comparacion["ARI_vs_kmeans"].min() > 0.95
     assert bic["k"].to_list() == [4, 5, 6]
+
+
+def test_las_columnas_extra_se_agregan_como_rasgos():
+    ancha = ancha_con_rel([[0.05] * 6, [0.0, 0.1, 0.0, 0.1, 0.0, 0.1]]).with_columns(pl.Series("esc_rel", [1.5, -1.5]))
+    m = seg.matriz_rasgos(ancha, extras=("esc_rel",))
+    assert m.shape == (2, 4)
+    assert m[:, 3].tolist() == [1.5, -1.5]

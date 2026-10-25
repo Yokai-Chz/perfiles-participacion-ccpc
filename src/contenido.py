@@ -16,8 +16,8 @@ NOMBRES_ENTIDAD = {
     30: "Veracruz", 31: "Yucatán", 32: "Zacatecas",
 }
 
-NOMBRES = {1: "Jóvenes urbanos de coyuntura", 2: "Jóvenes del campo en retirada", 3: "Adultez urbana constante",
-           4: "Mayores en ascenso", 5: "Adultez rural de alta participación"}
+NOMBRES = {1: "Urbanos de participación intermitente", 2: "Jóvenes del campo en retirada", 3: "Adultez urbana constante",
+           4: "Mayores en ascenso", 5: "Adultez de alta participación"}
 
 # Estrategia por perfil: objetivo, acciones propuestas, indicador de seguimiento, prioridad.
 ESTRATEGIAS = {
@@ -111,3 +111,13 @@ def narrativa(p: int, m: dict) -> str:
     donde = ", ".join(x["top_entidades"])
     return (f"Representa {_pct(x['pct_lista'])} de la lista nominal de 2024. {edad.capitalize()}; {sexo} y {territorio}. "
             f"{forma} Frente a su peso nacional, destaca en {donde}.")
+
+
+def distritos_prioritarios(p: int, n: int = 3) -> list[str]:
+    """Distritos federales vigentes (marco 2023) con más personas del perfil en la lista nominal 2024."""
+    d = (_t("distritos_composicion_2023.csv")
+         .with_columns((pl.col("LN") * pl.col(f"pct_perfil_{p}") / 100).alias("personas"))
+         .sort("personas", "EDOCVE", "DEF", descending=[True, False, False]).head(n))   # EDOCVE y DEF desempatan
+    return [f"{NOMBRES_ENTIDAD[r['EDOCVE']]} {r['DEF']} ({r['personas'] / 1000:.0f} mil, {_pct(r[f'pct_perfil_{p}'])})"
+            for r in d.iter_rows(named=True)]
+

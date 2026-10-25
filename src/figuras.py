@@ -148,7 +148,7 @@ def ficha(p, metricas, ruta):
         fig.text(0.06 + 0.23 * i, 0.728, rotulo, fontsize=8.5, color=TINTA_2)
 
     nac = _t("participacion_nacional_filtrada.csv")
-    ax = fig.add_axes([0.09, 0.50, 0.38, 0.19])
+    ax = fig.add_axes([0.09, 0.535, 0.38, 0.155])
     _bandas_presidenciales(ax)
     ax.plot(nac["AELEC"], 100 * nac["tasa_nacional"], color=NEUTRO, linewidth=1.5, linestyle=(0, (4, 3)), label="Promedio nacional")
     ax.plot(ELECCIONES, [100 * x["part"][a] for a in ELECCIONES], color=SERIE[p], linewidth=2.2, marker="o", markersize=6,
@@ -162,21 +162,33 @@ def ficha(p, metricas, ruta):
     d = _t("perfiles_edad.csv")
     grupos = [c for c in d.columns if c != "perfil"]
     fila = d.filter(pl.col("perfil") == p).row(0, named=True)
-    ax2 = fig.add_axes([0.57, 0.50, 0.38, 0.19])
+    ax2 = fig.add_axes([0.57, 0.535, 0.38, 0.155])
     ax2.bar(range(len(grupos)), [fila[g] for g in grupos], color=SERIE[p], width=0.7)
     ax2.set_xticks(range(len(grupos)), grupos, rotation=70, fontsize=6.5)
     ax2.set_title("Edad (% de la lista del perfil)", loc="left", fontsize=9.5, fontweight="bold")
     _limpiar(ax2)
 
-    fig.text(0.06, 0.41, "Estrategia propuesta", fontsize=13, fontweight="bold")
-    fig.text(0.06, 0.39, f"Prioridad: {est['prioridad']}", fontsize=9.5, color=TINTA_2)
-    y = 0.365
+    fig.text(0.06, 0.445, "Estrategia propuesta", fontsize=13, fontweight="bold")
+    fig.text(0.06, 0.425, f"Prioridad: {est['prioridad']}", fontsize=9.5, color=TINTA_2)
+    y = 0.40
     bloques = [("Objetivo: " + est["objetivo"], "")] + [("• " + a, "") for a in est["acciones"]] \
         + [("Cómo se mide: " + est["indicador"], "")]
     for texto, _ in bloques:
         envuelto = textwrap.fill(texto, 92, subsequent_indent="   ")
         fig.text(0.06, y, envuelto, fontsize=10, va="top", linespacing=1.5)
         y -= 0.0185 * (envuelto.count("\n") + 1) + 0.016
+
+    # Dónde empezar (spec 002, RF-11).
+    y -= 0.008
+    fig.text(0.06, y, "Dónde empezar", fontsize=11, fontweight="bold", va="top")
+    y -= 0.024
+    lineas = ["Distritos federales con más personas del perfil (entidad y distrito; personas y % de la lista 2024 del distrito): "
+              + "; ".join(contenido.distritos_prioritarios(p)) + "."]
+    for texto in lineas:
+        envuelto = textwrap.fill(texto, 92)
+        fig.text(0.06, y, envuelto, fontsize=9.5, va="top", linespacing=1.5)
+        y -= 0.0175 * (envuelto.count("\n") + 1) + 0.012
+    assert y > 0.092, f"la ficha {p} se encima con el pie (y = {y:.3f})"
 
     pie = ("Borrador para revisión del equipo. Fuente: Conteos Censales de Participación Ciudadana (INE), cálculos propios. "
            "Los perfiles describen grupos de edad y sexo (campo SEXO de la fuente) en cada elección, no a las mismas personas a lo largo del tiempo.")

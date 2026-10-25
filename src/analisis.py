@@ -9,11 +9,12 @@ from sklearn.metrics import adjusted_rand_score
 
 import calidad
 import cohortes as coh
+import escolaridad as esc
 import indicadores as ind
 import perfiles as per
 import segmentacion as seg
 import territorio as ter
-from configuracion import (CIRCUNSCRIPCION, ELECCIONES, PROCESADOS, REFERENCIA_PRINCIPAL, SEMILLA, TABLAS, UMBRAL_LN,
+from configuracion import (CIRCUNSCRIPCION, ECEG, ELECCIONES, PROCESADOS, REFERENCIA_PRINCIPAL, SEMILLA, TABLAS, UMBRAL_LN,
                            UMBRAL_NS, rutas)
 
 # referencia: contra qué se mide la participación relativa. territorio: columna territorial de la celda.
@@ -25,6 +26,9 @@ CORRIDAS = {
     "ns": {"referencia": "entidad", "territorio": "EDOCVE", "excluir_ns": True, "volatilidad": False, "indicadores": "ns"},
     "volatilidad": {"referencia": "entidad", "territorio": "EDOCVE", "excluir_ns": False, "volatilidad": True, "indicadores": "entidad"},
     "region": {"referencia": "region", "territorio": "REGION", "excluir_ns": False, "volatilidad": False, "indicadores": "region"},
+    # Spec 003: la tabla ancha de la principal más la escolaridad del entorno relativa a la entidad.
+    "escolaridad": {"referencia": "entidad", "territorio": "EDOCVE", "excluir_ns": False, "volatilidad": False, "indicadores": "entidad",
+                    "extras": ("esc_rel",)},
 }
 ULTIMA = ELECCIONES[-1]
 
@@ -34,8 +38,11 @@ def _nombre(base: str, r: dict) -> str:
 
 
 def _csv(df: pl.DataFrame, ruta) -> None:
-    """Escribe con 12 cifras significativas: el último dígito de algunos cálculos varía entre corridas (RNF-02)."""
-    df.with_columns(pl.col(pl.Float64).round_sig_figs(12)).write_csv(ruta)
+    """Escribe con 10 cifras significativas (RNF-02).
+
+    Las sumas en paralelo cambian el último dígito entre corridas; con 12 cifras ese ruido a veces cruzaba el redondeo.
+    """
+    df.with_columns(pl.col(pl.Float64).round_sig_figs(10)).write_csv(ruta)
 
 
 def _datos() -> pl.LazyFrame:
@@ -82,7 +89,11 @@ def paso_segmentacion(corrida: str = REFERENCIA_PRINCIPAL) -> dict:
     c, r = CORRIDAS[corrida], rutas(corrida)
     fuente = rutas(c["indicadores"])
     ancha = pl.read_parquet(fuente["procesados"] / _nombre("celdas_ancha", fuente))
-    rasgos = seg.matriz_rasgos(ancha, c["volatilidad"])
+    extras = c.get("extras", ())
+    if extras:
+        datos_extra = pl.read_parquet(PROCESADOS / "escolaridad_celdas.parquet").select(*ind.CLAVE_CELDA, *extras)
+        ancha = ancha.join(datos_extra, on=ind.CLAVE_CELDA, how="inner")   # celdas sin dato quedan fuera y se reportan
+    rasgos = seg.matriz_rasgos(ancha, c["volatilidad"], extras)
     peso = ancha["LN_medio"].to_numpy()
     Z = seg.estandarizar(rasgos)
 
@@ -137,7 +148,9 @@ def paso_perfiles(corrida: str = REFERENCIA_PRINCIPAL) -> dict:
 
     comp, sin_perfil, total = per.composicion_secciones(PROCESADOS / f"ccpc_{ULTIMA}.parquet", asig)
     comp.write_parquet(r["procesados"] / _nombre(f"composicion_secciones_{ULTIMA}", r))
-    _csv(per.secciones_mayoritarias(comp), t / "perfiles_secciones_mayoritarias.csv")
+    n_secciones = (pl.scan_parquet(PROCESADOS / f"ccpc_{ULTIMA}.parquet").select("EDOCVE", "SECCION").unique()
+                   .select(pl.len()).collect().item())
+    _csv(per.secciones_mayoritarias(comp, n_secciones), t / "perfiles_secciones_mayoritarias.csv")
     k = int(asig["perfil"].max())
     sumas = comp.select(pl.sum_horizontal([f"prop_perfil_{i}" for i in range(1, k + 1)]).alias("s"))["s"]
     assert abs(sumas.min() - 1) < 1e-9 and abs(sumas.max() - 1) < 1e-9, "la composición de cada sección debe sumar 1"
@@ -145,11 +158,16 @@ def paso_perfiles(corrida: str = REFERENCIA_PRINCIPAL) -> dict:
                      "entidades_dominantes": per.entidades_dominantes(ent_ancha)}
 
 
-def paso_comparar_corridas(corridas=("nacional", "ns", "volatilidad", "region")) -> pl.DataFrame:
-    """k, ARI frente a la principal y celdas comparadas de cada corrida de apoyo (spec 002, RF-02 y RF-13).
+def paso_comparar_corridas(corridas=None) -> pl.DataFrame:
+    """k, ARI frente a la principal y celdas comparadas de cada corrida de apoyo (spec 002, RF-02 y RF-13; spec 003, RF-06).
 
     En la corrida por región, cada celda de entidad recibe el perfil de la celda de región que la contiene.
+    Por omisión compara todas las corridas de apoyo que ya tienen asignación. Escribe además la tabla de cruce
+    (lista nominal 2024 por perfil principal y perfil de la corrida) de cada una.
     """
+    if corridas is None:
+        corridas = [c for c in CORRIDAS if c != REFERENCIA_PRINCIPAL
+                    and (PROCESADOS / _nombre("celdas_perfil", rutas(c))).exists()]
     principal = pl.read_parquet(PROCESADOS / "celdas_perfil.parquet")
     filas = []
     for corrida in corridas:
@@ -159,6 +177,8 @@ def paso_comparar_corridas(corridas=("nacional", "ns", "volatilidad", "region"))
         if CORRIDAS[corrida]["territorio"] == "REGION":
             base = ind.con_region(principal)
         cruce = base.join(otra, on=[col for col in otra.columns if col != "perfil_otra"])
+        _csv(cruce.group_by("perfil", "perfil_otra").agg(pl.col(f"LN_{ULTIMA}").sum()).sort("perfil", "perfil_otra"),
+             TABLAS / f"sensibilidad_cruce_{corrida}.csv")
         filas.append({"corrida": corrida, "k": int(otra["perfil_otra"].max()), "celdas_principal": principal.height,
                       "celdas_comparadas": cruce.height,
                       "pct_LN_comparada": 100 * cruce[f"LN_{ULTIMA}"].sum() / principal[f"LN_{ULTIMA}"].sum(),
@@ -213,6 +233,7 @@ def paso_cohortes() -> dict:
     quinq = coh.cohortes_quinquenales(exacta)
     quinq_sexo = coh.cohortes_quinquenales(exacta, ("SEXO",))
     primer = coh.efecto_primer_voto(exacta)
+    _csv(coh.resumen_primer_voto(primer), TABLAS / "efecto_primer_voto_resumen.csv")
     asig = pl.read_parquet(PROCESADOS / "celdas_perfil.parquet")
     por_perfil = coh.cohortes_por_perfil(pl.scan_parquet(PROCESADOS / f"ccpc_{ULTIMA}.parquet"), asig)
     for nombre, tabla in [("cohortes_curva_edad", curva), ("cohortes_participacion", quinq), ("cohortes_sexo", quinq_sexo),
@@ -269,3 +290,29 @@ def paso_descriptivas() -> dict:
                           ("descriptiva_participacion_entidad", por_entidad)]:
         _csv(tabla, TABLAS / f"{nombre}.csv")
     return {"piramide": piramide, "tipo": por_tipo, "entidad": por_entidad}
+
+
+def paso_escolaridad() -> dict | None:
+    """Escolaridad del entorno por celda y por perfil a partir de la ECEG 2020 (spec 003). Sin datos, avisa y no hace nada."""
+    if not ECEG.exists() or not any(ECEG.iterdir()):
+        print(f"No hay datos de la ECEG 2020 en {ECEG}; se omite la escolaridad (spec 003, D5).")
+        return None
+    eceg = esc.leer_eceg(ECEG)
+    ln = esc.lista_por_seccion_y_celda(PROCESADOS / "ccpc_2021.parquet")
+    unida, union = esc.unir_secciones(ln, eceg)
+    _csv(union, TABLAS / "escolaridad_union.csv")
+    cobertura = float(100 * union["LN_sin_eceg"].sum() / union["LN_2021"].sum())
+    assert cobertura < 5, f"{cobertura:.1f} % de la LN 2021 sin escolaridad: se detiene (spec 003, criterio de finalización)"
+
+    celdas = esc.relativa_a_entidad(esc.por_celda(unida))
+    celdas.write_parquet(PROCESADOS / "escolaridad_celdas.parquet")
+    _csv(celdas, TABLAS / "escolaridad_celdas.csv")
+    asig = pl.read_parquet(PROCESADOS / "celdas_perfil.parquet")
+    perfil = esc.por_perfil(celdas, asig)
+    _csv(perfil, TABLAS / "escolaridad_por_perfil.csv")
+    w = celdas["LN_con_dato"].cast(pl.Float64)
+    nacional = float((celdas["esc"] * w).sum() / w.sum())
+    resumen = pl.DataFrame({"pct_LN_2021_sin_dato": [cobertura], "grado_promedio_nacional_LN": [nacional],
+                            "eta2_tipo_seccion": [esc.varianza_explicada(celdas, "TIPOSEC")]})
+    _csv(resumen, TABLAS / "escolaridad_resumen.csv")
+    return {"resumen": resumen, "union": union, "pct_sin_dato": cobertura, "celdas": celdas, "por_perfil": perfil, "grado_nacional": nacional}

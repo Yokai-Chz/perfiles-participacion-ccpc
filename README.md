@@ -5,6 +5,8 @@ Análisis de los Conteos Censales de Participación Ciudadana (CCPC, 2009 a 2024
 ## Qué datos se necesitan
 Los 192 CSV originales (6 elecciones × 32 entidades) en `datasets/`, una subcarpeta por elección (`DatosAbiertos_DECEyEC_ConteosCensales2009/` a `...2024/`). Nunca se modifican. No se incluyen en el repositorio por su tamaño (unos 3.5 GB).
 
+Para la escolaridad (spec 003): la descarga nacional de las Estadísticas Censales a Escalas Geoelectorales 2020 del INEGI, descomprimida en `datasets/eceg_2020/` (se usa `conjunto_de_datos/INE_SECCION_2020.csv`). Sin ella, el análisis corre igual y omite la escolaridad.
+
 ## Cómo reproducir
 Desde la raíz del proyecto, con Python 3.10 a 3.13 (numpy 2.2 no tiene versión para 3.14). Probado con Python 3.12 en Linux:
 
@@ -27,6 +29,7 @@ En Windows, el intérprete del entorno es `src\.venv\Scripts\python.exe` en luga
 | `src/indicadores.py` | Grupos de edad, tasa de participación, participación relativa, celdas. |
 | `src/segmentacion.py` | Rasgos (con volatilidad opcional), k-means ponderado, selección de k, estabilidad, PCA y comparación con Ward y mezcla gaussiana. |
 | `src/cohortes.py` | Cohortes de nacimiento como pseudo-panel, curva por edad y efecto del primer voto. |
+| `src/escolaridad.py` | Escolaridad del entorno por celda a partir de la ECEG 2020 (Censo por sección y sexo). |
 | `src/territorio.py` | Equivalencia de secciones entre marcos 2021 y 2023, trayectoria y composición por distrito federal. |
 | `src/perfiles.py` | Caracterización de perfiles y composición de cada sección. |
 | `src/contenido.py` | Nombres, narrativa y estrategias de los perfiles (borrador); las cifras se leen de las tablas. |

@@ -37,3 +37,13 @@ def test_efecto_primer_voto_compara_con_3_y_6_anios_despues():
 def test_sin_eleccion_posterior_el_cambio_queda_nulo():
     e = coh.efecto_primer_voto(_exacta([(2006, 2024, 0.02)]))
     assert e["rel_siguiente"].to_list() == [None]
+
+
+def test_el_resumen_del_primer_voto_solo_promedia_cohortes_con_seguimiento():
+    efecto = pl.DataFrame({"nacimiento": [1991, 1994, 2006, 1990], "edad_primera": [18, 18, 18, 19],
+                           "rel_primera": [0.04, 0.02, 0.01, -0.05], "rel_siguiente": [-0.08, -0.10, None, -0.09]})
+    r = coh.resumen_primer_voto(efecto).row(0, named=True)
+    assert r["cohortes_con_seguimiento"] == 2 and (r["nacimiento_desde"], r["nacimiento_hasta"]) == (1991, 1994)
+    assert r["rel_a_los_18"] == pytest.approx(0.03)
+    assert r["rel_tres_anios_despues"] == pytest.approx(-0.09)
+    assert r["rel_a_los_18_todas"] == pytest.approx(0.07 / 3)

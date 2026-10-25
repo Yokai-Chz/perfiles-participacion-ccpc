@@ -13,9 +13,9 @@ TIPOS = {"AELEC": pl.Int16, "EDOCVE": pl.Int8, "MPIOCVE": pl.Int16, "SECCION": p
 
 
 def listar_por_anio(carpeta: Path) -> dict[int, list[Path]]:
-    """Agrupa los CSV por año de elección, buscando en subcarpetas (2021 viene anidado)."""
+    """Agrupa los CSV de los CCPC por año de elección, buscando en subcarpetas (2021 viene anidado)."""
     por_anio: dict[int, list[Path]] = {}
-    for ruta in sorted(carpeta.rglob("*.csv")):
+    for ruta in sorted(carpeta.rglob("*conteoscensales*.csv")):   # otras fuentes en datasets/ (p. ej. eceg_2020) no entran
         anio = int(ruta.stem.split("conteoscensales")[1][:4])
         por_anio.setdefault(anio, []).append(ruta)
     return por_anio

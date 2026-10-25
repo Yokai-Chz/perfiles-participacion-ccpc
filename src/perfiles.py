@@ -81,12 +81,17 @@ def top_entidades(ent: pl.DataFrame, peso: pl.DataFrame, n: int = 5) -> pl.DataF
     return sobre.group_by("perfil", maintain_order=True).head(n)
 
 
-def secciones_mayoritarias(comp: pl.DataFrame, umbral: float = 0.5) -> pl.DataFrame:
-    """Número de secciones donde cada perfil reúne `umbral` o más de la lista nominal, y total de secciones."""
+def secciones_mayoritarias(comp: pl.DataFrame, secciones_total: int, umbral: float = 0.5) -> pl.DataFrame:
+    """Número de secciones donde cada perfil reúne `umbral` o más de la lista nominal.
+
+    `secciones_total` son todas las secciones de la elección; las que no aparecen en `comp` tienen toda su lista
+    en celdas excluidas por tamaño y se cuentan en `secciones_sin_perfil`.
+    """
     columnas = sorted((c for c in comp.columns if c.startswith("prop_perfil_")), key=lambda c: int(c.rsplit("_", 1)[1]))
     return pl.DataFrame({"perfil": [int(c.rsplit("_", 1)[1]) for c in columnas],
                          "secciones_mayoritarias": [int((comp[c] >= umbral).sum()) for c in columnas],
-                         "secciones_total": [comp.height] * len(columnas)})
+                         "secciones_total": [secciones_total] * len(columnas),
+                         "secciones_sin_perfil": [secciones_total - comp.height] * len(columnas)})
 
 
 def composicion_secciones(parquet_ultima_eleccion: Path, asig: pl.DataFrame) -> tuple[pl.DataFrame, int, int]:
