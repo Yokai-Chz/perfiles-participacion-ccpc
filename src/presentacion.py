@@ -5,7 +5,7 @@ from pptx.dml.color import RGBColor
 from pptx.util import Cm, Pt
 
 import contenido
-from configuracion import NOMBRE_EQUIPO, TABLAS
+from configuracion import FUENTE, NOMBRE_EQUIPO, TABLAS
 from figuras import FIGURAS, SERIE
 
 TINTA, TINTA_2, FONDO = RGBColor(0x0B, 0x0B, 0x0B), RGBColor(0x52, 0x51, 0x4E), RGBColor(0xFC, 0xFC, 0xFB)
@@ -25,7 +25,7 @@ def texto(diap, x, y, w, h, lineas, tam=18, color=TINTA, negrita=False):
         par.text = linea
         par.space_after = Pt(6)
         for r in par.runs:
-            r.font.name, r.font.size, r.font.bold, r.font.color.rgb = "Arial", Pt(tam), negrita, color
+            r.font.name, r.font.size, r.font.bold, r.font.color.rgb = FUENTE, Pt(tam), negrita, color
     return caja
 
 
@@ -54,7 +54,7 @@ def tabla(diap, filas, x, y, anchos, tam=13):
             c.fill.fore_color.rgb = RGBColor(0xEE, 0xED, 0xE9) if i == 0 else FONDO
             for par in c.text_frame.paragraphs:
                 for r in par.runs:
-                    r.font.name, r.font.size, r.font.bold, r.font.color.rgb = "Arial", Pt(tam), i == 0, TINTA
+                    r.font.name, r.font.size, r.font.bold, r.font.color.rgb = FUENTE, Pt(tam), i == 0, TINTA
 
 
 def construir(ruta):

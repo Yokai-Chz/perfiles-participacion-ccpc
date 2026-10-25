@@ -3,9 +3,10 @@ from pathlib import Path
 
 import polars as pl
 
+from configuracion import CIRCUNSCRIPCION
 from indicadores import CLAVE_CELDA, ETIQUETAS_EDAD, indice_grupo_edad, tasa_fila
 
-RASGOS_PONDERADOS = ["nivel", "brecha", "tendencia"]
+RASGOS_PONDERADOS = ["nivel", "brecha", "tendencia", "volatilidad"]
 
 
 def peso_y_rasgos(asig: pl.DataFrame) -> pl.DataFrame:
@@ -29,7 +30,14 @@ def distribucion(asig: pl.DataFrame, columna: str) -> pl.DataFrame:
     """Porcentaje de la lista nominal 2024 de cada perfil que cae en cada valor de `columna`. Huecos en 0."""
     t = (asig.group_by("perfil", columna).agg(pl.col("LN_2024").sum())
          .with_columns((100 * pl.col("LN_2024") / pl.col("LN_2024").sum().over("perfil")).round(2).alias("pct")))
-    return t.pivot(on=columna, index="perfil", values="pct").sort("perfil").with_columns(pl.exclude("perfil").fill_null(0.0))
+    ancha = t.pivot(on=columna, index="perfil", values="pct").sort("perfil").with_columns(pl.exclude("perfil").fill_null(0.0))
+    return ancha.select("perfil", *sorted(c for c in ancha.columns if c != "perfil"))   # orden fijo (RNF-02 de la 002)
+
+
+def ancha_por_perfil(largo: pl.DataFrame, indice: str, valores: str) -> pl.DataFrame:
+    """Pivote con una columna por perfil en orden 1..k y filas ordenadas por `indice`; huecos en 0."""
+    ancha = largo.pivot(on="perfil", index=indice, values=valores).sort(indice).with_columns(pl.exclude(indice).fill_null(0.0))
+    return ancha.select(indice, *sorted((c for c in ancha.columns if c != indice), key=int))
 
 
 def distribucion_edad(asig: pl.DataFrame) -> pl.DataFrame:
@@ -75,7 +83,7 @@ def top_entidades(ent: pl.DataFrame, peso: pl.DataFrame, n: int = 5) -> pl.DataF
 
 def secciones_mayoritarias(comp: pl.DataFrame, umbral: float = 0.5) -> pl.DataFrame:
     """Número de secciones donde cada perfil reúne `umbral` o más de la lista nominal, y total de secciones."""
-    columnas = [c for c in comp.columns if c.startswith("prop_perfil_")]
+    columnas = sorted((c for c in comp.columns if c.startswith("prop_perfil_")), key=lambda c: int(c.rsplit("_", 1)[1]))
     return pl.DataFrame({"perfil": [int(c.rsplit("_", 1)[1]) for c in columnas],
                          "secciones_mayoritarias": [int((comp[c] >= umbral).sum()) for c in columnas],
                          "secciones_total": [comp.height] * len(columnas)})
@@ -96,6 +104,16 @@ def composicion_secciones(parquet_ultima_eleccion: Path, asig: pl.DataFrame) -> 
     k = int(asig["perfil"].max())
     comp = (sec.drop_nulls("perfil").group_by("EDOCVE", "SECCION", "perfil").agg(pl.col("LN").sum())
             .with_columns((pl.col("LN").cast(pl.Float64) / pl.col("LN").sum().over("EDOCVE", "SECCION").cast(pl.Float64)).alias("prop"))
-            .pivot(on="perfil", index=["EDOCVE", "SECCION"], values="prop").fill_null(0.0))
+            .pivot(on="perfil", index=["EDOCVE", "SECCION"], values="prop").with_columns(pl.exclude("EDOCVE", "SECCION").fill_null(0.0)))
     comp = comp.rename({str(i): f"prop_perfil_{i}" for i in range(1, k + 1) if str(i) in comp.columns})
-    return comp, sin_perfil, total
+    props = [f"prop_perfil_{i}" for i in range(1, k + 1) if f"prop_perfil_{i}" in comp.columns]
+    return comp.select("EDOCVE", "SECCION", *props).sort("EDOCVE", "SECCION"), sin_perfil, total
+
+
+def composicion_circunscripcion(comp_distritos: pl.DataFrame) -> pl.DataFrame:
+    """Porcentaje de la lista nominal de cada circunscripción en cada perfil, a partir de la composición por distrito."""
+    pcts = [c for c in comp_distritos.columns if c.startswith("pct_perfil_")]
+    return (comp_distritos.with_columns(pl.col("EDOCVE").replace_strict(CIRCUNSCRIPCION, return_dtype=pl.Int8).alias("circunscripcion"))
+            .group_by("circunscripcion")
+            .agg(pl.col("LN").sum(), *[((pl.col(c) * pl.col("LN")).sum() / pl.col("LN").sum()).alias(c) for c in pcts])
+            .sort("circunscripcion"))

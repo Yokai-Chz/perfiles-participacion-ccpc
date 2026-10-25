@@ -1,4 +1,5 @@
 # Datos originales y procesados (pesan GB; se regeneran con el notebook)
+datasets/
 drive-download-*/
 datos_procesados/
 

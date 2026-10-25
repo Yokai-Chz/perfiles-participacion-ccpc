@@ -151,3 +151,6 @@ Cada una tiene opciones y una recomendación. Ninguna está resuelta.
 **D16. Referencia de la participación relativa** (surgió el 2026-10-24 al ejecutar la segmentación; enmienda D4).
 Con la referencia nacional (D4a), la entidad explica 74 % de la varianza de `brecha` y 76 % de la de `tendencia`, y 10 de 32 entidades tienen más de 80 % de su lista en un solo perfil: los perfiles se parecen a etiquetas de estado. (a) Mantener D4a como principal y reportar la variante como apoyo. (b) Medir cada celda contra la tasa de su propia entidad en cada elección. (c) Presentar ambas.
 **Resuelta el 2026-10-24: (b).** La referencia nacional se conserva como análisis de apoyo (`entrega/tablas/sensibilidad_nacional/`). Con (b), k = 5 y ninguna entidad supera 80 % en un perfil. Hipótesis sin verificar: la brecha refleja elecciones locales concurrentes.
+
+**D17. Fuente en Linux** (surgió el 2026-10-25 al reproducir en Fedora, donde no hay Arial).
+**Resuelta el 2026-10-25 por la persona responsable:** usar Liberation Sans, del sistema, que tiene las mismas medidas que Arial. Riesgo: RE-01 pide Arial o Calibri, y el PDF declara Liberation Sans.

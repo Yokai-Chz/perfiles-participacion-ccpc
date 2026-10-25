@@ -8,14 +8,19 @@
 - Texto de la convocatoria en `convocatoria.md` (el PDF no se puede leer sin librerías).
 - Calendario: ingesta+calidad 10-25 · segmentación 10-26/27 · perfiles 10-28 · documentos 10-29 · revisión y .zip 10-30 · envío antes de 10-31 18:00.
 
-- 10-24: Colab falló por cuota de gdown. Se trabaja en local con los CSV en `drive-download-20261025T011328Z-1-001/`. Entorno en `src/.venv` (requirements.txt). Autorizado por el usuario el 10-24 usar matplotlib, reportlab, python-pptx, pypdf y nbconvert además del art. 1.
-- 10-24: la lógica está en módulos `src/*.py`; un solo notebook `src/reto1_perfiles_participacion.ipynb` los llama y lo explica. 35 pruebas en `src/tests/` pasan. Antislop y antislop-code activos (sin rayas largas, sin cifras sin tabla, sin scripts generadores en el repo).
+- 10-25: spec 002 aprobada (D1 a D7 con su recomendación + RF-16). Corridas en `analisis.CORRIDAS`: principal intacta (k=5, mismas tablas que d48acaf más columna `volatilidad`); apoyo: nacional (k=4), sin NS > 25 % (k=5, ARI 0.93), con volatilidad (k=4, ARI 0.44), por circunscripción INE/CG130/2023 (k=5, ARI 0.32). Ward y mezcla gaussiana: ARI 0.37 y 0.26; silhouette 0.24: perfiles = partición de un continuo, declararlo.
+- 10-25: distritos federales 2009-2021 vienen en marco 2021 (secciones no cambian de DEF); 2024 en marco 2023. Trayectoria con marco 2021 por equivalencia de sección; 2,775 secciones nuevas de 2024 (5.3 % de LN) sin distrito. Primer voto: +3.4 pp a los 18, -9.6 pp tres años después.
+- 10-25: las tablas se escriben con 12 cifras significativas y orden fijo; dos corridas dan CSV idénticos byte a byte. Figuras de apoyo en `entrega/estadisticas/` (19). Entrega pesa 11 MB.
+- 10-25: se trabaja en Fedora. Los 192 CSV están en `datasets/` (ignorada por git). Entorno `src/.venv` con Python 3.12.5 de pyenv; numpy 2.2.6 no tiene versión para 3.14. Notebook completo en unos 45 s.
+- 10-25 (D17): los entregables usan Liberation Sans (sistema, medidas de Arial); ruta en `configuracion.ARCHIVOS_FUENTE`. RE-01 pide Arial o Calibri: riesgo declarado.
+- 10-24: Colab falló por cuota de gdown. Autorizado por el usuario el 10-24 usar matplotlib, reportlab, python-pptx, pypdf y nbconvert además del art. 1.
+- 10-24: la lógica está en módulos `src/*.py`; un solo notebook `src/reto1_perfiles_participacion.ipynb` los llama y lo explica. 48 pruebas en `src/tests/` pasan. Antislop y antislop-code activos (sin rayas largas, sin cifras sin tabla, sin scripts generadores en el repo).
 - D16 resuelta (b) el 10-24 y registrada en la spec: participación relativa contra la propia entidad. Corrida principal k=5; la referencia nacional (k=4, 10 entidades dominadas por un perfil) queda en `entrega/tablas/sensibilidad_nacional/`.
 - Entregables generados el 10-24 como borrador: `entrega/documento_tecnico.pdf` (10 págs.), `entrega/fichas/` (5 PNG 300 ppp), `entrega/presentacion_ejecutiva.pptx` (10 diap.). Nombres y estrategias en `src/contenido.py`, pendientes de validar por el equipo. Estado por requisito en `entrega/lista_verificacion.md`.
 - Faltan: nombre del equipo (marcador `[NOMBRE DEL EQUIPO]`), cartas firmadas, `.zip`, contraste con plataforma CCPC. D10 resuelta el 10-24: repo git local (rama main) y remoto privado https://github.com/Yokai-Chz/perfiles-participacion-ccpc. `.gitignore` excluye CSV, Parquet, .venv, markitdown y *.zip.
 
 ## Validación y errores a evitar
-- El pivote de Polars no fija el orden de filas ni columnas: ordenar antes de segmentar (ya hecho en `pivotar_ancha`).
+- El pivote de Polars no fija el orden de filas ni columnas y `fill_null(0.0)` sobre todo el pivote vuelve decimal la clave: ordenar y rellenar solo las columnas de valores.
 - Reportlab declara Helvetica aunque no la use: verificar la fuente con los spans de texto (pymupdf), no con los recursos del PDF.
 - Desempatar siempre los órdenes (p. ej. entidades con el mismo índice) para que las tablas no cambien entre corridas.
 - La edad modal se calcula por grupo completo (mediana), no por la celda más grande.

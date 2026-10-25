@@ -34,3 +34,16 @@ def test_tabla_de_calidad_totales_y_edades_atipicas():
 def test_participacion_nacional_es_cociente_de_sumas():
     t = calidad.nacional(calidad.tabla(tabla_base().lazy()))
     assert t["part_SV_sobre_SV_NV"][0] == round(100 * 15 / 27, 2)
+
+
+def test_ns_en_el_umbral_exacto_no_se_marca_y_por_encima_si():
+    df = pl.DataFrame({"AELEC": [2021] * 2, "EDOCVE": [1, 1], "SECCION": [1, 2], "LN": [100, 100], "NS": [25, 26]})
+    marcadas = calidad.secciones_ns_alto(calidad.ns_por_seccion(df.lazy()), 0.25)
+    assert marcadas["SECCION"].to_list() == [2]
+
+
+def test_el_histograma_de_ns_cubre_todas_las_secciones():
+    df = pl.DataFrame({"AELEC": [2021] * 3, "EDOCVE": [1] * 3, "SECCION": [1, 2, 3], "LN": [100] * 3, "NS": [0, 3, 100]})
+    h = calidad.distribucion_ns(calidad.ns_por_seccion(df.lazy()))
+    assert h["secciones"].sum() == 3
+    assert h.filter(pl.col("desde") == 0.95)["secciones"].item() == 1   # NS = 100 % cae en el último intervalo

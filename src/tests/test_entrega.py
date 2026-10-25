@@ -6,10 +6,10 @@ pytestmark = pytest.mark.skipif(not (v.ENTREGA / "documento_tecnico.pdf").exists
                                 reason="primero genera los entregables (documento.py, presentacion.py, figuras.py)")
 
 
-def test_el_documento_tiene_entre_8_y_12_paginas_en_arial():
+def test_el_documento_tiene_entre_8_y_12_paginas_en_liberation_sans():
     r = v.resumen()
     assert 8 <= r["paginas"] <= 12
-    assert r["fuentes"] <= {"ArialMT", "Arial-BoldMT", "Arial-ItalicMT"}
+    assert r["fuentes"] <= {"LiberationSans", "LiberationSans-Bold", "LiberationSans-Italic"}
 
 
 def test_la_presentacion_tiene_como_maximo_10_diapositivas():

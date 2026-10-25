@@ -8,7 +8,7 @@ import polars as pl
 from matplotlib import font_manager
 
 import contenido
-from configuracion import ELECCIONES, NOMBRE_EQUIPO, PRESIDENCIALES, TABLAS
+from configuracion import ARCHIVOS_FUENTE, ELECCIONES, FUENTE, NOMBRE_EQUIPO, PRESIDENCIALES, TABLAS
 
 FIGURAS = TABLAS.parent / "figuras"
 FICHAS = TABLAS.parent / "fichas"
@@ -18,9 +18,9 @@ SERIE = {1: "#2a78d6", 2: "#eb6834", 3: "#1baf7a", 4: "#eda100", 5: "#e87ba4"}
 TINTA, TINTA_2, SUPERFICIE, REJILLA = "#0b0b0b", "#52514e", "#fcfcfb", "#e4e3df"
 NEUTRO = "#9a998f"
 
-for ruta in ("C:/Windows/Fonts/arial.ttf", "C:/Windows/Fonts/arialbd.ttf"):
+for ruta in ARCHIVOS_FUENTE.values():
     font_manager.fontManager.addfont(ruta)
-plt.rcParams.update({"font.family": "Arial", "figure.facecolor": SUPERFICIE, "axes.facecolor": SUPERFICIE,
+plt.rcParams.update({"font.family": FUENTE, "figure.facecolor": SUPERFICIE, "axes.facecolor": SUPERFICIE,
                      "savefig.facecolor": SUPERFICIE, "text.color": TINTA, "axes.labelcolor": TINTA_2,
                      "xtick.color": TINTA_2, "ytick.color": TINTA_2, "axes.edgecolor": REJILLA,
                      "axes.spines.top": False, "axes.spines.right": False, "font.size": 10})

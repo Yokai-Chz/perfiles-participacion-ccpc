@@ -60,3 +60,43 @@ def test_perfiles_se_numeran_por_nivel_ascendente():
     perfil = seg.etiquetas_por_nivel(modelo, Z, w)
     niveles = [Z[perfil == i, 0].mean() for i in range(1, 5)]
     assert niveles == sorted(niveles)
+
+
+def ancha_con_rel(filas):
+    return pl.DataFrame({f"rel_{e}": [f[i] for f in filas] for i, e in enumerate(ELECCIONES)})
+
+
+def test_volatilidad_es_cero_con_participacion_relativa_constante():
+    ancha = ancha_con_rel([[0.05] * 6, [0.0, 0.1, 0.0, 0.1, 0.0, 0.1]])
+    v = seg.volatilidad(ancha)
+    assert v[0] == pytest.approx(0)
+    assert v[1] == pytest.approx(0.05)
+
+
+def test_la_variante_con_volatilidad_agrega_una_columna():
+    ancha = ancha_con_rel([[0.05] * 6, [0.0, 0.1, 0.0, 0.1, 0.0, 0.1]])
+    assert seg.matriz_rasgos(ancha).shape == (2, 3)
+    assert seg.matriz_rasgos(ancha, con_volatilidad=True).shape == (2, 4)
+
+
+def test_numerar_por_nivel_ordena_de_menor_a_mayor():
+    etiquetas = np.array([7, 7, 3, 3, 9])
+    nivel = np.array([0.5, 0.5, -1.0, -1.0, 0.0])
+    assert seg.numerar_por_nivel(etiquetas, nivel, np.ones(5)).tolist() == [3, 3, 1, 1, 2]
+
+
+def test_pca_explica_toda_la_varianza_y_fija_el_signo():
+    Z, _ = datos_separables()
+    p = seg.pca(seg.estandarizar(Z), ["a", "b", "c"])
+    assert p["varianza"]["acumulada"][-1] == pytest.approx(1)
+    for c in ["PC1", "PC2", "PC3"]:
+        cargas = p["cargas"][c].to_numpy()
+        assert cargas[np.abs(cargas).argmax()] > 0
+
+
+def test_metodos_alternativos_coinciden_en_datos_separables():
+    Z, _ = datos_separables()
+    etiquetas = seg.segmentar(Z, 4, 1, np.ones(len(Z))).labels_
+    comparacion, bic, _ = seg.comparar_metodos(Z, etiquetas, 4, 1)
+    assert comparacion["ARI_vs_kmeans"].min() > 0.95
+    assert bic["k"].to_list() == [4, 5, 6]
