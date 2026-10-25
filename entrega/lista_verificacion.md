@@ -7,7 +7,7 @@ Estado al 2026-10-24. «Hecho» significa generado y comprobado por código (`py
 | RE-01 | Documento técnico PDF | Hecho (borrador) | `entrega/documento_tecnico.pdf`: 10 páginas, texto en Arial, cuerpo en 11 pt con interlineado de 16.5 pt (1.5). Las tablas van en 10 pt. Falta el nombre del equipo (`[NOMBRE DEL EQUIPO]`) y la revisión del equipo. |
 | RE-02 | Fichas de perfil | Hecho (borrador) | `entrega/fichas/ficha_perfil_1.png` a `_5.png`, A4 a 300 ppp. Falta el nombre del equipo. |
 | RE-03 | Presentación ejecutiva | Hecho (borrador) | `entrega/presentacion_ejecutiva.pptx`: 10 diapositivas. Falta el nombre del equipo. |
-| RE-04 | Código | Hecho | `src/` con 35 pruebas y `README.md`. Falta decidir D10 (repositorio git). |
+| RE-04 | Código | Hecho | `src/` con 35 pruebas y `README.md`. Repositorio privado en https://github.com/Yokai-Chz/perfiles-participacion-ccpc (D10); si el enlace debe verlo el INE, hay que hacerlo público o dar acceso. El código también va en el `.zip`. |
 | RE-05 | Carta de cesión de derechos | Falta | Firmas de todas las personas integrantes (límite interno 10-28). |
 | RE-06 | Carta de decir verdad | Falta | Firmas de todas las personas integrantes (límite interno 10-28). |
 | RE-07 | Paquete `.zip` | Falta | Nombre del equipo y eje; solo por correo a las dos direcciones de la convocatoria, antes del 10-31 a las 18:00. Tope sugerido: 20 MB (D13). |

@@ -12,7 +12,7 @@
 - 10-24: la lógica está en módulos `src/*.py`; un solo notebook `src/reto1_perfiles_participacion.ipynb` los llama y lo explica. 35 pruebas en `src/tests/` pasan. Antislop y antislop-code activos (sin rayas largas, sin cifras sin tabla, sin scripts generadores en el repo).
 - D16 resuelta (b) el 10-24 y registrada en la spec: participación relativa contra la propia entidad. Corrida principal k=5; la referencia nacional (k=4, 10 entidades dominadas por un perfil) queda en `entrega/tablas/sensibilidad_nacional/`.
 - Entregables generados el 10-24 como borrador: `entrega/documento_tecnico.pdf` (10 págs.), `entrega/fichas/` (5 PNG 300 ppp), `entrega/presentacion_ejecutiva.pptx` (10 diap.). Nombres y estrategias en `src/contenido.py`, pendientes de validar por el equipo. Estado por requisito en `entrega/lista_verificacion.md`.
-- Faltan: nombre del equipo (marcador `[NOMBRE DEL EQUIPO]`), cartas firmadas, `.zip`, contraste con plataforma CCPC, D10 (git; no se creó repositorio).
+- Faltan: nombre del equipo (marcador `[NOMBRE DEL EQUIPO]`), cartas firmadas, `.zip`, contraste con plataforma CCPC. D10 resuelta el 10-24: repo git local (rama main) y remoto privado https://github.com/Yokai-Chz/perfiles-participacion-ccpc. `.gitignore` excluye CSV, Parquet, .venv, markitdown y *.zip.
 
 ## Validación y errores a evitar
 - El pivote de Polars no fija el orden de filas ni columnas: ordenar antes de segmentar (ya hecho en `pivotar_ancha`).
