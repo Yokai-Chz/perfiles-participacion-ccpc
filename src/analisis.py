@@ -9,12 +9,15 @@ from sklearn.metrics import adjusted_rand_score
 
 import calidad
 import cohortes as coh
+import contenido
 import escolaridad as esc
+import experimentos as exp
+import figuras
 import indicadores as ind
 import perfiles as per
 import segmentacion as seg
 import territorio as ter
-from configuracion import (CIRCUNSCRIPCION, ECEG, ELECCIONES, PROCESADOS, REFERENCIA_PRINCIPAL, SEMILLA, TABLAS, UMBRAL_LN,
+from configuracion import (CIRCUNSCRIPCION, ECEG, ELECCIONES, ESTADISTICAS, PROCESADOS, REFERENCIA_PRINCIPAL, SEMILLA, TABLAS, UMBRAL_LN,
                            UMBRAL_NS, rutas)
 
 # referencia: contra qué se mide la participación relativa. territorio: columna territorial de la celda.
@@ -316,3 +319,199 @@ def paso_escolaridad() -> dict | None:
                             "eta2_tipo_seccion": [esc.varianza_explicada(celdas, "TIPOSEC")]})
     _csv(resumen, TABLAS / "escolaridad_resumen.csv")
     return {"resumen": resumen, "union": union, "pct_sin_dato": cobertura, "celdas": celdas, "por_perfil": perfil, "grado_nacional": nacional}
+
+
+EXPERIMENTOS = TABLAS / "experimentos"
+# Repeticiones de estabilidad por variante: un consenso tarda unos 40 s y K-Prototypes unos 2 s por ajuste.
+REPETICIONES = {"consenso": 3, "kproto": 5}
+
+
+def paso_experimentos(variantes=None, repeticiones: int = 10) -> dict:
+    """Variantes de segmentación, métricas comunes, compuerta D4, descripción y gráficas (spec 004). Tarda unos 8 minutos."""
+    EXPERIMENTOS.mkdir(parents=True, exist_ok=True)
+    ancha = pl.read_parquet(PROCESADOS / "celdas_ancha.parquet")
+    largo = pl.read_parquet(PROCESADOS / "celdas_largo.parquet")
+    principal = pl.read_parquet(PROCESADOS / "celdas_perfil.parquet")
+    clave = ind.CLAVE_CELDA
+    assert ancha.select(clave).equals(principal.select(clave)), "la tabla ancha y la principal deben tener las mismas celdas en el mismo orden"
+    mixta = exp.matriz_mixta(ancha)
+    peso, nivel = mixta["peso"], mixta["num"][:, 0]
+    Z4 = seg.estandarizar(mixta["num"])
+    ajustes = exp.ajustadores(ancha)
+    variantes = variantes or list(ajustes)
+
+    filas, etiquetas = [], {}
+    for v in variantes:
+        ks = [5] if v == "consenso" else range(4, 7)
+        seleccion, particiones = exp.evaluar_variante(ajustes[v], Z4, peso, SEMILLA, ks, REPETICIONES.get(v, repeticiones))
+        _csv(seleccion, EXPERIMENTOS / f"seleccion_k_{v}.csv")
+        k = seg.elegir_k(seleccion)
+        etiquetas[v] = seg.numerar_por_nivel(particiones[k], nivel, peso)
+        fila = seleccion.filter(pl.col("k") == k).row(0, named=True)
+        filas.append({"variante": v, **fila,
+                      "ARI_vs_principal": adjusted_rand_score(principal["perfil"].to_numpy(), etiquetas[v])})
+    tabla = exp.compuerta(pl.DataFrame(filas))
+    _csv(tabla, EXPERIMENTOS / "metricas_variantes.csv")
+
+    salida = {"metricas": tabla, "etiquetas": etiquetas, "descripcion": {}}
+    for v, etq in etiquetas.items():
+        salida["descripcion"][v] = _describir_variante(v, etq, ancha, largo, Z4, peso)
+
+    if "consenso" in etiquetas:
+        pac = exp.consenso(Z4, 5, peso, SEMILLA)["PAC"]
+        salida["PAC"] = pac
+        _csv(pl.DataFrame({"k": [5], "particiones": [300], "PAC": [pac]}), EXPERIMENTOS / "consenso_pac.csv")
+    if "gmm" in etiquetas:
+        salida["gmm"] = _probabilidades_gmm(etiquetas["gmm"], ancha, Z4, peso)
+    if "gower" in etiquetas:
+        salida["gower_gamma"] = _sensibilidad_gower(etiquetas["gower"], mixta)
+    return salida
+
+
+def _describir_variante(v: str, etq, ancha, largo, Z4, peso) -> dict:
+    """Centroides, composición, tasa absoluta y nombre sugerido de cada perfil de una variante (RF-06 a RF-08)."""
+    clave = ind.CLAVE_CELDA
+    asig = ancha.select(*clave, "LN_medio", f"LN_{ULTIMA}").with_columns(pl.Series("perfil", etq, dtype=pl.Int8))
+    centroides = exp.centroides_z(Z4, etq, peso)
+    sexo = per.distribucion(asig, "SEXO").rename({"0": "pct_hombres", "1": "pct_mujeres"})
+    tipo = per.distribucion(asig, "TIPOSEC")
+    edad = per.distribucion_edad(asig)
+    mediana = per.grupo_edad_mediano(asig)
+    tasa = per.participacion_por_perfil(largo.join(asig.select(*clave, "perfil"), on=clave))
+    nombres = {}
+    for fila in centroides.iter_rows(named=True):
+        p = fila["perfil"]
+        uno = lambda t: {c: x for c, x in t.filter(pl.col("perfil") == p).row(0, named=True).items() if c != "perfil"}
+        nombres[p] = contenido.sugerir_nombre(fila, uno(edad), uno(tipo))
+    lectura = centroides.with_columns(
+        pl.Series("nombre_sugerido", [nombres[p] for p in centroides["perfil"]]),
+        pl.Series("lectura", [exp.lectura_centroide(f) for f in centroides.iter_rows(named=True)]),
+        pl.Series("pct_LN_2024", [float(100 * asig.filter(pl.col("perfil") == p)[f"LN_{ULTIMA}"].sum() / asig[f"LN_{ULTIMA}"].sum())
+                                  for p in centroides["perfil"]]))
+    composicion = (lectura.join(sexo, on="perfil").join(tipo, on="perfil").join(mediana, on="perfil")
+                   .join(tasa.rename({c: f"tasa_{c}" for c in tasa.columns if c != "perfil"}), on="perfil"))
+    _csv(composicion, EXPERIMENTOS / f"perfiles_{v}.csv")
+    _csv(edad, EXPERIMENTOS / f"perfiles_edad_{v}.csv")
+    figuras.radar_centroides(centroides, ESTADISTICAS / f"experimentos_radar_{v}.png", nombres)
+    figuras.mapa_centroides(centroides, ESTADISTICAS / f"experimentos_centroides_{v}.png", nombres)
+    return {"perfiles": composicion, "edad": edad, "nombres": nombres}
+
+
+def _probabilidades_gmm(etq, ancha, Z4, peso) -> dict:
+    """Probabilidad de pertenencia por celda y celdas en transición (probabilidad máxima < 0.6) por perfil (RF-05)."""
+    k = int(etq.max())
+    pr = exp.probabilidades(exp.mezcla(Z4, k, peso, SEMILLA), Z4, peso, etq)
+    celdas = ancha.select(*ind.CLAVE_CELDA, "LN_medio").with_columns(
+        pl.Series("perfil", etq, dtype=pl.Int8),
+        *[pl.Series(f"prob_{j + 1}", pr["prob"][:, j]) for j in range(k)],
+        pl.Series("prob_max", pr["pmax"]), pl.Series("entropia", pr["entropia"]))
+    _csv(celdas, EXPERIMENTOS / "gmm_probabilidades.csv")
+    por_perfil = (celdas.group_by("perfil")
+                  .agg(((pl.col("prob_max") * pl.col("LN_medio")).sum() / pl.col("LN_medio").sum()).alias("prob_max_media"),
+                       (100 * pl.col("LN_medio").filter(pl.col("prob_max") < 0.6).sum() / pl.col("LN_medio").sum())
+                       .alias("pct_LN_transicion"))
+                  .sort("perfil"))
+    total = pl.DataFrame({"perfil": [0], "prob_max_media": [float(np.average(pr["pmax"], weights=peso))],
+                          "pct_LN_transicion": [pr["pct_LN_transicion"]]}).cast(por_perfil.schema)
+    resumen = pl.concat([por_perfil, total])
+    _csv(resumen, EXPERIMENTOS / "gmm_transicion.csv")
+    return {"celdas": celdas, "resumen": resumen}
+
+
+def _sensibilidad_gower(etq, mixta) -> pl.DataFrame:
+    """ARI de k-medoides sobre Gower con peso categórico 0.5 y 2 frente a peso 1 (RF-09, D5)."""
+    k = int(etq.max())
+    filas = []
+    for gamma in (0.5, 1.0, 2.0):
+        D = exp.gower(mixta["num"], mixta["ordinal"], mixta["cat"], gamma)
+        otra = exp.k_medoides(D, k, mixta["peso"], SEMILLA)[0]
+        filas.append({"peso_categorico": gamma, "k": k, "ARI_vs_peso_1": adjusted_rand_score(etq, otra)})
+    tabla = pl.DataFrame(filas)
+    _csv(tabla, EXPERIMENTOS / "gower_sensibilidad.csv")
+    return tabla
+
+
+def paso_arquetipos(repeticiones: int = 10) -> dict:
+    """Arquetipos ponderados como lectura complementaria de los perfiles (spec 004, RF-10, RF-11, D8 a D11). Tarda unos 5 minutos."""
+    EXPERIMENTOS.mkdir(parents=True, exist_ok=True)
+    ancha = pl.read_parquet(PROCESADOS / "celdas_ancha.parquet")
+    principal = pl.read_parquet(PROCESADOS / "celdas_perfil.parquet")
+    clave = ind.CLAVE_CELDA
+    assert ancha.select(clave).equals(principal.select(clave)), "la tabla ancha y la principal deben tener las mismas celdas en el mismo orden"
+    rasgos = seg.matriz_rasgos(ancha, con_volatilidad=True)
+    Z4 = seg.estandarizar(rasgos)
+    peso = ancha["LN_medio"].to_numpy().astype(float)
+    ln = ancha[f"LN_{ULTIMA}"].to_numpy().astype(float)
+
+    candidatas = peso >= exp.MINIMO_LN_ANCLA
+    seleccion, k, ajustes = exp.seleccion_arquetipos(Z4, peso, SEMILLA, candidatas)
+    _csv(seleccion, EXPERIMENTOS / "arquetipos_seleccion.csv")
+    r = ajustes[k]
+    A, B = r["A"], r["B"]
+    estabilidad = exp.estabilidad_arquetipos(Z4, peso, r["Z"], SEMILLA, candidatas, repeticiones)
+    _csv(estabilidad, EXPERIMENTOS / "arquetipos_estabilidad.csv")
+    columnas = [f"arq_{j + 1}" for j in range(k)]
+
+    # Demografía de cada arquetipo: cada celda aporta su lista nominal multiplicada por su peso en ese arquetipo.
+    base = ancha.select(*clave, "LN_medio", f"LN_{ULTIMA}")
+    repartida = pl.concat([base.with_columns(pl.lit(j + 1, dtype=pl.Int8).alias("perfil"),
+                                             (pl.col(f"LN_{ULTIMA}") * A[:, j]).alias(f"LN_{ULTIMA}")) for j in range(k)])
+    sexo = per.distribucion(repartida, "SEXO").rename({"0": "pct_hombres", "1": "pct_mujeres"})
+    tipo = per.distribucion(repartida, "TIPOSEC")
+    edad = per.distribucion_edad(repartida)
+    mediana = per.grupo_edad_mediano(repartida)
+    _csv(edad, EXPERIMENTOS / "arquetipos_edad.csv")
+
+    celdas = ancha.select(clave).to_dicts()
+    def ancla(j: int) -> str:
+        top = np.argsort(-B[j], kind="stable")[:3]
+        return "; ".join(f"{contenido.NOMBRES_ENTIDAD[celdas[i]['EDOCVE']]} {celdas[i]['TIPOSEC']} "
+                         f"{'mujeres' if celdas[i]['SEXO'] == 1 else 'hombres'} {celdas[i]['grupo_edad']} ({B[j, i]:.2f})"
+                         for i in top if B[j, i] > 0.01)
+
+    zs = {j + 1: dict(zip(exp.RASGOS_BASE, r["Z"][j])) for j in range(k)}
+    nombres = contenido.nombrar_polos(zs)
+    filas = []
+    for j in range(k):
+        z = zs[j + 1]
+        uno = lambda t: {c: x for c, x in t.filter(pl.col("perfil") == j + 1).row(0, named=True).items() if c != "perfil"}
+        filas.append({"arquetipo": j + 1, "nombre": nombres[j + 1], **{f"{n}_z": v for n, v in z.items()},
+                      **dict(zip(exp.RASGOS_BASE, B[j] @ rasgos)),
+                      "nombre_sugerido": contenido.sugerir_nombre(z, uno(edad), uno(tipo)),
+                      "lectura": exp.lectura_centroide(z), "pct_LN_2024": float(100 * (ln @ A[:, j]) / ln.sum()),
+                      "celdas_ancla": ancla(j)})
+    tabla = (pl.DataFrame(filas).join(sexo.rename({"perfil": "arquetipo"}), on="arquetipo")
+             .join(tipo.rename({"perfil": "arquetipo"}), on="arquetipo").join(mediana.rename({"perfil": "arquetipo"}), on="arquetipo"))
+    _csv(tabla, EXPERIMENTOS / "arquetipos.csv")
+
+    mezcla_celdas = base.with_columns(pl.Series("perfil", principal["perfil"]), *[pl.Series(c, A[:, j]) for j, c in enumerate(columnas)],
+                                      pl.Series("peso_max", A.max(axis=1)))
+    _csv(mezcla_celdas, EXPERIMENTOS / "arquetipos_mezcla_celdas.csv")
+    mezcla_perfiles = exp.mezcla_por_grupo(A, principal["perfil"].to_numpy(), ln)
+    _csv(mezcla_perfiles.rename({"grupo": "perfil"}), EXPERIMENTOS / "arquetipos_mezcla_perfiles.csv")
+
+    secciones, sin_dato = per.mezcla_secciones(PROCESADOS / f"ccpc_{ULTIMA}.parquet", mezcla_celdas, columnas)
+    sumas = secciones.select(pl.sum_horizontal(columnas).alias("s"))["s"]
+    assert abs(sumas.min() - 1) < 1e-6 and abs(sumas.max() - 1) < 1e-6, "la mezcla de cada sección debe sumar 1"
+    secciones.write_parquet(PROCESADOS / f"arquetipos_mezcla_secciones_{ULTIMA}.parquet")
+    # 4 decimales en lugar de 10 cifras: son 70 mil secciones y así la tabla pesa la mitad.
+    secciones.with_columns(pl.col(columnas).round(4)).write_csv(EXPERIMENTOS / f"arquetipos_mezcla_secciones_{ULTIMA}.csv")
+
+    cerca = A.max(axis=1) >= 0.6
+    resumen = pl.DataFrame({
+        "k": [k], "varianza_explicada": [r["varianza_explicada"]], "minimo_LN_ancla": [exp.MINIMO_LN_ANCLA],
+        "celdas_candidatas_ancla": [int(candidatas.sum())],
+        "pct_LN_cerca_de_un_polo": [float(100 * ln[cerca].sum() / ln.sum())],
+        "distancia_z_media_submuestras": [float(estabilidad["distancia_z"].mean())],
+        "distancia_z_max_submuestras": [float(estabilidad["distancia_z"].max())],
+        "secciones": [secciones.height],
+        "secciones_con_arquetipo_mayoritario": [int((secciones.select(pl.max_horizontal(columnas)).to_series() >= 0.5).sum())],
+        "LN_sin_dato_secciones": [sin_dato]})
+    _csv(resumen, EXPERIMENTOS / "arquetipos_resumen.csv")
+
+    centroides = pl.DataFrame({"perfil": list(range(1, k + 1)), **{n: r["Z"][:, i] for i, n in enumerate(exp.RASGOS_BASE)}})
+    figuras.radar_centroides(centroides, ESTADISTICAS / "arquetipos_radar.png", nombres,
+                             "Arquetipos en z-score (línea punteada: promedio de las celdas)")
+    figuras.mezcla_por_perfil(mezcla_perfiles, ESTADISTICAS / "arquetipos_mezcla_perfiles.png", contenido.NOMBRES, nombres)
+    return {"seleccion": seleccion, "k": k, "arquetipos": tabla, "estabilidad": estabilidad, "mezcla_perfiles": mezcla_perfiles,
+            "secciones": secciones, "resumen": resumen, "nombres": nombres}

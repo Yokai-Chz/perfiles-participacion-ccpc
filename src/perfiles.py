@@ -115,6 +115,24 @@ def composicion_secciones(parquet_ultima_eleccion: Path, asig: pl.DataFrame) -> 
     return comp.select("EDOCVE", "SECCION", *props).sort("EDOCVE", "SECCION"), sin_perfil, total
 
 
+
+def mezcla_secciones(parquet_ultima_eleccion: Path, mezcla_celdas: pl.DataFrame, columnas: list[str]) -> tuple[pl.DataFrame, int]:
+    """Mezcla de arquetipos de cada sección: promedio de la mezcla de sus celdas ponderado por su lista nominal (spec 004, RF-10).
+
+    `mezcla_celdas` trae la clave de celda y `columnas` (pesos que suman 1). Devuelve (mezcla, LN sin dato por celdas excluidas).
+    """
+    clave = ["EDOCVE", "TIPOSEC", "SEXO", "g"]
+    sec = (pl.scan_parquet(parquet_ultima_eleccion)
+           .with_columns(pl.col("TIPOSEC").cast(pl.Utf8), indice_grupo_edad())
+           .group_by("EDOCVE", "SECCION", *clave[1:]).agg(pl.col("LN").sum().cast(pl.Int64))
+           .collect()
+           .join(mezcla_celdas.select(*clave, *columnas), on=clave, how="left"))
+    sin_dato = int(sec.filter(pl.col(columnas[0]).is_null())["LN"].sum())
+    mezcla = (sec.drop_nulls(columnas[0]).group_by("EDOCVE", "SECCION")
+              .agg(pl.col("LN").sum(), *[((pl.col(c) * pl.col("LN")).sum() / pl.col("LN").sum()).alias(c) for c in columnas])
+              .sort("EDOCVE", "SECCION"))
+    return mezcla, sin_dato
+
 def composicion_circunscripcion(comp_distritos: pl.DataFrame) -> pl.DataFrame:
     """Porcentaje de la lista nominal de cada circunscripción en cada perfil, a partir de la composición por distrito."""
     pcts = [c for c in comp_distritos.columns if c.startswith("pct_perfil_")]

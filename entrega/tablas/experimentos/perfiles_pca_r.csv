@@ -1,0 +1,5 @@
+perfil,nivel,brecha,tendencia,volatilidad,nombre_sugerido,lectura,pct_LN_2024,pct_hombres,pct_mujeres,M,R,U,grupo_edad_mediano,tasa_2009,tasa_2012,tasa_2015,tasa_2018,tasa_2021,tasa_2024
+1,-1.345370925,0.7667829805,-0.3695263914,-0.4340305132,Jóvenes urbanos de baja participación y de coyuntura presidencial,"nivel bajo, brecha alto",17.60679648,94.6,5.4,12.95,13.75,73.31,25-29,0.3025,0.4771,0.3139,0.4855,0.3565,0.4281
+2,-0.5760981743,0.9933286686,-0.2995083598,-0.4491096656,Jóvenes urbanos de baja participación y de coyuntura presidencial,"nivel bajo, brecha alto",25.83816428,44.1,55.9,11.94,10.73,77.33,30-34,0.3895,0.5767,0.4038,0.5756,0.4462,0.531
+3,0.1398694004,0.5616033973,-0.2286114422,-0.5652277608,Adultez urbana de participación estable y de coyuntura presidencial,"brecha alto, volatilidad bajo",24.89855044,42.84,57.16,15.03,18.19,66.78,40-44,0.4752,0.6622,0.5105,0.6565,0.5492,0.6216
+4,0.8633648139,0.002094000055,0.1295707895,-0.4494605423,Adultez urbana de alta participación,nivel alto,31.65648879,29.42,70.58,12.42,24.59,62.99,55-59,0.567,0.7358,0.6095,0.7282,0.6535,0.7247

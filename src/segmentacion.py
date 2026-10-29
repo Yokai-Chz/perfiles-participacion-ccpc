@@ -13,13 +13,13 @@ NOMBRES_RASGOS = ["nivel", "brecha", "tendencia"]
 NOMBRES_RASGOS_VOLATILIDAD = NOMBRES_RASGOS + ["volatilidad"]   # variante, spec 002 D2b
 
 
-def _rel(ancha: pl.DataFrame) -> np.ndarray:
+def rel(ancha: pl.DataFrame) -> np.ndarray:
     return np.column_stack([ancha[f"rel_{e}"].to_numpy() for e in ELECCIONES])
 
 
 def volatilidad(ancha: pl.DataFrame) -> np.ndarray:
     """Desviación estándar de la participación relativa entre las elecciones (spec 002, RF-03)."""
-    return _rel(ancha).std(axis=1)
+    return rel(ancha).std(axis=1)
 
 
 def matriz_rasgos(ancha: pl.DataFrame, con_volatilidad: bool = False, extras: tuple[str, ...] = ()) -> np.ndarray:
@@ -30,13 +30,13 @@ def matriz_rasgos(ancha: pl.DataFrame, con_volatilidad: bool = False, extras: tu
     nivel: participación relativa media. brecha: media en presidenciales menos media en intermedias.
     tendencia: pendiente de la participación relativa por elección.
     """
-    rel = _rel(ancha)
+    r = rel(ancha)
     pres = [ELECCIONES.index(e) for e in PRESIDENCIALES]
     inter = [ELECCIONES.index(e) for e in INTERMEDIAS]
     x = np.arange(len(ELECCIONES)) - (len(ELECCIONES) - 1) / 2
-    columnas = [rel.mean(axis=1), rel[:, pres].mean(axis=1) - rel[:, inter].mean(axis=1), rel @ x / (x ** 2).sum()]
+    columnas = [r.mean(axis=1), r[:, pres].mean(axis=1) - r[:, inter].mean(axis=1), r @ x / (x ** 2).sum()]
     if con_volatilidad:
-        columnas.append(rel.std(axis=1))
+        columnas.append(r.std(axis=1))
     columnas += [ancha[c].to_numpy() for c in extras]
     return np.column_stack(columnas)
 

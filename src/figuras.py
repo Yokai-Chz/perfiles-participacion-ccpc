@@ -4,8 +4,11 @@ import textwrap
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import numpy as np
 import polars as pl
+import seaborn as sns
 from matplotlib import font_manager
+from matplotlib.colors import LinearSegmentedColormap
 
 import contenido
 from configuracion import ARCHIVOS_FUENTE, ELECCIONES, FUENTE, NOMBRE_EQUIPO, PRESIDENCIALES, TABLAS
@@ -13,8 +16,9 @@ from configuracion import ARCHIVOS_FUENTE, ELECCIONES, FUENTE, NOMBRE_EQUIPO, PR
 FIGURAS = TABLAS.parent / "figuras"
 FICHAS = TABLAS.parent / "fichas"
 
-# Cinco primeras posiciones de la paleta categórica validada (azul, naranja, aqua, amarillo, magenta), en orden fijo.
-SERIE = {1: "#2a78d6", 2: "#eb6834", 3: "#1baf7a", 4: "#eda100", 5: "#e87ba4"}
+# Primeras posiciones de la paleta categórica validada (azul, naranja, aqua, amarillo, magenta, verde), en orden fijo.
+# La sexta solo la usan las variantes de la spec 004 con k = 6.
+SERIE = {1: "#2a78d6", 2: "#eb6834", 3: "#1baf7a", 4: "#eda100", 5: "#e87ba4", 6: "#008300"}
 TINTA, TINTA_2, SUPERFICIE, REJILLA = "#0b0b0b", "#52514e", "#fcfcfb", "#e4e3df"
 NEUTRO = "#9a998f"
 
@@ -79,7 +83,7 @@ def trayectorias(ruta, metricas):
 
 def pesos(ruta, metricas):
     fig, ax = plt.subplots(figsize=(6.2, 2.8), dpi=200)
-    etiquetas = [f"{p}. {x['nombre']}" for p, x in metricas.items()][::-1]
+    etiquetas = [textwrap.fill(f"{p}. {x['nombre']}", 30) for p, x in metricas.items()][::-1]
     valores = [x["pct_lista"] for x in metricas.values()][::-1]
     colores = [SERIE[p] for p in metricas][::-1]
     barras = ax.barh(etiquetas, valores, color=colores, height=0.6)
@@ -131,13 +135,21 @@ def seleccion_k(ruta):
     plt.close(fig)
 
 
+def _ajustar_a_ancho(fig, texto, ancho: float, minimo: float):
+    """Reduce la letra de `texto` hasta que ocupe a lo más `ancho` (fracción de la figura) en una línea."""
+    render = fig.canvas.get_renderer()
+    while texto.get_fontsize() > minimo and texto.get_window_extent(render).width > ancho * fig.bbox.width:
+        texto.set_fontsize(texto.get_fontsize() - 0.5)
+
+
 def ficha(p, metricas, ruta):
     """Ficha A4 a 300 ppp: cifras clave, trayectoria, edad y estrategia de un perfil."""
     x, est = metricas[p], contenido.ESTRATEGIAS[p]
     fig = plt.figure(figsize=(8.27, 11.69), dpi=300)
     fig.add_artist(plt.Rectangle((0, 0.955), 1, 0.045, transform=fig.transFigure, color=SERIE[p]))
     fig.text(0.06, 0.915, f"Perfil {p}", fontsize=11, color=TINTA_2)
-    fig.text(0.06, 0.88, x["nombre"], fontsize=22, fontweight="bold")
+    titulo = fig.text(0.06, 0.88, x["nombre"], fontsize=22, fontweight="bold")
+    _ajustar_a_ancho(fig, titulo, ancho=0.88, minimo=15)
     cuerpo = textwrap.fill(contenido.narrativa(p, metricas), 86)
     fig.text(0.06, 0.865, cuerpo, fontsize=10, va="top", linespacing=1.5)
 
@@ -209,3 +221,76 @@ def generar_todo():
     seleccion_k(FIGURAS / "seleccion_k.png")
     for p in m:
         ficha(p, m, FICHAS / f"ficha_perfil_{p}.png")
+
+
+def radar_centroides(centroides: pl.DataFrame, ruta, nombres: dict[int, str],
+                     titulo: str = "Centroides de los perfiles en z-score (línea punteada: promedio de las celdas)"):
+    """Un radar por perfil con la misma escala; la línea punteada es z = 0, el promedio de las celdas (spec 004, RF-07)."""
+    rasgos = [c for c in centroides.columns if c != "perfil"]
+    ang = np.linspace(0, 2 * np.pi, len(rasgos), endpoint=False)
+    cerrar = lambda v: np.r_[v, v[:1]]
+    lim = max(1.0, np.ceil(np.abs(centroides.select(rasgos).to_numpy()).max() * 2) / 2)
+    k = centroides.height
+    fig, ejes = plt.subplots(1, k, figsize=(2.6 * k, 3.5), dpi=200, subplot_kw={"polar": True})
+    for ax, fila in zip(np.atleast_1d(ejes), centroides.iter_rows(named=True)):
+        v = np.array([fila[r] for r in rasgos])
+        color = SERIE[fila["perfil"]]
+        ax.plot(cerrar(ang), np.zeros(len(ang) + 1), color=NEUTRO, lw=1, ls="--")
+        ax.plot(cerrar(ang), cerrar(v), color=color, lw=2)
+        ax.fill(cerrar(ang), cerrar(v), color=color, alpha=0.18, linewidth=0)
+        ax.set_ylim(-lim, lim)
+        ax.set_xticks(ang, rasgos, fontsize=8, color=TINTA_2)
+        ax.set_yticks([-1, 0, 1], ["−1", "0", "+1"], fontsize=7, color=TINTA_2)
+        ax.set_rlabel_position(45)
+        ax.tick_params(axis="x", pad=7)
+        ax.grid(color=REJILLA, linewidth=0.8)
+        ax.spines["polar"].set_color(REJILLA)
+        ax.set_title(f"{fila['perfil']}. {textwrap.fill(nombres[fila['perfil']], 24)}", fontsize=9, color=TINTA, pad=16)
+    fig.suptitle(titulo, x=0.01, ha="left", fontsize=11, fontweight="bold")
+    fig.tight_layout()
+    fig.savefig(ruta)
+    plt.close(fig)
+
+
+def mapa_centroides(centroides: pl.DataFrame, ruta, nombres: dict[int, str]):
+    """Valores de los centroides en z-score; escala divergente con gris en 0 (spec 004, RF-07)."""
+    rasgos = [c for c in centroides.columns if c != "perfil"]
+    divergente = LinearSegmentedColormap.from_list("divergente", [SERIE[1], "#efeeea", SERIE[2]])
+    valores = centroides.select(rasgos).to_numpy()
+    fig, ax = plt.subplots(figsize=(6.6, 0.55 * centroides.height + 1.3), dpi=200)
+    tope = float(np.abs(valores).max())
+    sns.heatmap(valores, vmin=-tope, vmax=tope, center=0, cmap=divergente, annot=True, fmt="+.2f",
+                annot_kws={"color": TINTA, "fontsize": 9}, linewidths=2, linecolor=SUPERFICIE, cbar=False, ax=ax,
+                xticklabels=rasgos, yticklabels=[f"{p}. {nombres[p]}" for p in centroides["perfil"]])
+    ax.tick_params(length=0, labelsize=8.5)
+    fig.suptitle("Centroides en z-score (azul: bajo el promedio; naranja: arriba)", x=0.01, ha="left", fontsize=11, fontweight="bold")
+    fig.tight_layout()
+    fig.savefig(ruta)
+    plt.close(fig)
+
+
+def mezcla_por_perfil(mezcla: pl.DataFrame, ruta, nombres_perfil: dict[int, str], nombres_arquetipo: dict[int, str]):
+    """Barras apiladas al 100 %: de qué arquetipos se compone, en promedio, cada perfil (spec 004, RF-10)."""
+    columnas = [c for c in mezcla.columns if c.startswith("arq_")]
+    filas = list(mezcla.iter_rows(named=True))[::-1]   # perfil 1 arriba
+    fig, ax = plt.subplots(figsize=(7.4, 0.62 * len(filas) + 1.6), dpi=200)
+    for y, fila in enumerate(filas):
+        izquierda = 0.0
+        for c in columnas:
+            j, v = int(c.split("_")[1]), 100 * fila[c]
+            ax.barh(y, v, left=izquierda, height=0.62, color=SERIE[j], edgecolor=SUPERFICIE, linewidth=2)
+            if v >= 10:
+                ax.text(izquierda + v / 2, y, f"{v:.0f} %", ha="center", va="center", fontsize=8, color=TINTA)
+            izquierda += v
+    ax.set_yticks(range(len(filas)), [f"{f['grupo']}. {textwrap.fill(nombres_perfil[f['grupo']], 34)}" for f in filas], fontsize=8)
+    ax.set_xlim(0, 100)
+    ax.set_xlabel("% de la lista nominal 2024 del perfil")
+    ax.tick_params(axis="y", length=0)
+    _limpiar(ax, "x")
+    ax.legend(handles=[plt.Rectangle((0, 0), 1, 1, color=SERIE[int(c.split("_")[1])]) for c in columnas],
+              labels=[textwrap.fill(f"A{int(c.split('_')[1])}. {nombres_arquetipo[int(c.split('_')[1])]}", 30) for c in columnas],
+              frameon=False, fontsize=7.5, ncol=2, loc="lower left", bbox_to_anchor=(0, 1.0))
+    fig.suptitle("Mezcla de arquetipos dentro de cada perfil", x=0.01, ha="left", fontsize=11, fontweight="bold")
+    fig.tight_layout()
+    fig.savefig(ruta)
+    plt.close(fig)

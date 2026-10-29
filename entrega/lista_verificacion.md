@@ -17,6 +17,8 @@ Estado al 2026-10-25. «Hecho» significa generado y comprobado por código (`py
 | RE-10 (002) | Presentación de 10 diapositivas como máximo | Hecho | Sin cambios de contenido; 10 diapositivas. |
 | RE-02 (002) | Fichas con distritos prioritarios | Hecho (borrador) | Bloque «Dónde empezar» con los 3 distritos federales vigentes con más personas del perfil. |
 | Spec 003 | Escolaridad del entorno (Censo 2020) | Hecho (borrador) | Corrida variante y párrafo en 3.6; figuras 20 y 21; el PDF queda en 11 páginas. |
+| Spec 004 | Variantes de segmentación y arquetipos | Hecho (borrador) | Ninguna variante reemplaza a la principal (compuerta D4); arquetipos como lectura complementaria con párrafo en 3.6; el PDF sigue en 11 páginas. Nombres de arquetipos pendientes de validar por el equipo. |
+| Nombres | Perfiles y polos en lenguaje ciudadano e incluyente | Hecho (borrador) | Cambiados el 10-29; fichas, PDF (11 págs.) y presentación regenerados. Pendiente de validar por el equipo. |
 | RF-16 (002) | Figuras de apoyo | Hecho | 19 PNG en `entrega/estadisticas/`, cada una leída de una tabla. |
 
 ## Pendientes de contenido

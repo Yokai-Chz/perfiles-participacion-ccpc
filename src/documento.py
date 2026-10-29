@@ -94,6 +94,17 @@ def construir(ruta):
     if hay_esc:
         eres = _t("escolaridad_resumen.csv").row(0, named=True)
         eper = {r["perfil"]: r for r in _t("escolaridad_por_perfil.csv").iter_rows(named=True)}
+    # Spec 004: arquetipos como lectura complementaria.
+    hay_arq = (TABLAS / "experimentos" / "arquetipos_resumen.csv").exists() and (TABLAS / "experimentos" / "consenso_pac.csv").exists()
+    if hay_arq:
+        ares = _t("experimentos/arquetipos_resumen.csv").row(0, named=True)
+        anom = dict(_t("experimentos/arquetipos.csv").select("arquetipo", "nombre").iter_rows())
+        amix = {r["perfil"]: r for r in _t("experimentos/arquetipos_mezcla_perfiles.csv").iter_rows(named=True)}
+        pac = _t("experimentos/consenso_pac.csv")["PAC"][0]
+
+        def mezcla_txt(perfil):
+            dos = sorted(((v, int(c.split("_")[1])) for c, v in amix[perfil].items() if c.startswith("arq_")), reverse=True)[:2]
+            return " y ".join(f"{100 * v:.0f} % «{anom[j][0].lower() + anom[j][1:]}»" for v, j in dos)
 
     h = []
     h += [p("Perfiles ciudadanos de participación", TITULO),
@@ -108,7 +119,7 @@ def construir(ruta):
           p(f"Los dos perfiles de mayor prioridad para el INE son los más jóvenes. El perfil 1, <b>{m[1]['nombre']}</b>, reúne {pct(1):.0f} % de la lista nominal "
             f"de 2024 y participa {m[1]['brecha_pp']:.0f} puntos más en las presidenciales que en las intermedias. El perfil 2, <b>{m[2]['nombre']}</b>, pesa "
             f"{pct(2):.0f} % y es el que más cayó en las elecciones presidenciales: de {100 * m[2]['part'][2012]:.0f} % en 2012 a "
-            f"{100 * m[2]['part'][2024]:.0f} % en 2024. En el otro extremo, los <b>{m[4]['nombre'].lower()}</b> (perfil 4) son el grupo con mayor aumento: "
+            f"{100 * m[2]['part'][2024]:.0f} % en 2024. En el otro extremo, el perfil 4, <b>{m[4]['nombre']}</b>, es el grupo con mayor aumento: "
             f"su participación en intermedias pasó de {100 * m[4]['part'][2009]:.0f} % a {100 * m[4]['part'][2021]:.0f} % entre 2009 y 2021."),
           p("Para cada perfil proponemos una estrategia distinta de fomento a la participación, con objetivo, acciones e indicador de seguimiento (sección 5). "
             "Los nombres y las estrategias son propuestas para revisión del equipo y de las áreas del INE que las aplicarían."),
@@ -179,6 +190,13 @@ def construir(ruta):
             f"{corr['escolaridad']['k']} grupos (ARI de {corr['escolaridad']['ARI_vs_principal']:.2f}): los perfiles 1 y 2 se conservan y los de mayor participación se separan por "
             f"escolaridad. Pero el tipo de sección explica {100 * eres['eta2_tipo_seccion']:.0f} % de su variación, así que en buena parte repite la división urbano-rural. "
             f"El entorno del perfil 1 tiene {eper[1]['grado_promedio_entorno']:.1f} años de escolaridad promedio y el del perfil 2, {eper[2]['grado_promedio_entorno']:.1f}.")]
+    if hay_arq:
+        h += [p(f"<b>Arquetipos.</b> En un consenso de 300 agrupamientos (k-means, Ward y mezcla gaussiana sobre submuestras), {100 * pac:.0f} % de los pares de "
+            f"celdas a veces quedan juntos y a veces no: la frontera entre perfiles no es nítida. Por eso agregamos una lectura complementaria con análisis de "
+            f"arquetipos, que describe cada celda como mezcla de unos pocos polos extremos en lugar de asignarla a un solo grupo. Con {ares['k']} arquetipos se "
+            f"explica {100 * ares['varianza_explicada']:.0f} % de la variación de nivel, brecha, tendencia y volatilidad, y {ares['pct_LN_cerca_de_un_polo']:.0f} % "
+            f"de la lista nominal tiene al menos 60 % de un solo arquetipo. El perfil 1 se compone de {mezcla_txt(1)}; el perfil 2, de {mezcla_txt(2)}. "
+            "Los arquetipos son polos de referencia, no grupos de personas: por eso se nombran por la forma de votar. La mezcla de cada sección está en el repositorio.")]
 
     h += [p("4. Los cinco perfiles", H1),
           p("Los perfiles se describen con cifras agregadas de la lista nominal de 2024. Conviene leerlos con tres precauciones. Primero, describen <i>grupos de edad y sexo en cada elección</i>, no "

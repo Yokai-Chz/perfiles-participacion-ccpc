@@ -16,8 +16,10 @@ NOMBRES_ENTIDAD = {
     30: "Veracruz", 31: "Yucatán", 32: "Zacatecas",
 }
 
-NOMBRES = {1: "Urbanos de participación intermitente", 2: "Jóvenes del campo en retirada", 3: "Adultez urbana constante",
-           4: "Mayores en ascenso", 5: "Adultez de alta participación"}
+# Quién + cómo vota, en lenguaje ciudadano e incluyente (cambio del 2026-10-29).
+NOMBRES = {1: "Población urbana que vota en presidenciales", 2: "Juventud rural que vota cada vez menos",
+           3: "Personas adultas de ciudad con voto constante", 4: "Personas mayores que votan cada vez más",
+           5: "Personas adultas y mayores que votan en toda elección"}
 
 # Estrategia por perfil: objetivo, acciones propuestas, indicador de seguimiento, prioridad.
 ESTRATEGIAS = {
@@ -121,3 +123,54 @@ def distritos_prioritarios(p: int, n: int = 3) -> list[str]:
     return [f"{NOMBRES_ENTIDAD[r['EDOCVE']]} {r['DEF']} ({r['personas'] / 1000:.0f} mil, {_pct(r[f'pct_perfil_{p}'])})"
             for r in d.iter_rows(named=True)]
 
+
+
+# Spec 004, D7. Frases sin flexión de género para que combinen con cualquier sujeto.
+EDAD_JOVEN = ["18-19", "20-24", "25-29", "30-34"]
+EDAD_MAYOR = ["60-64", "65-69", "70-74", "75-79", "80-89", "90+"]
+FRASE_RASGO = {("nivel", 1): "de alta participación", ("nivel", -1): "de baja participación",
+               ("brecha", 1): "de coyuntura presidencial", ("brecha", -1): "con participación sostenida en intermedias",
+               ("tendencia", 1): "en ascenso", ("tendencia", -1): "en retirada",
+               ("volatilidad", 1): "de participación intermitente", ("volatilidad", -1): "de participación estable"}
+TERRITORIO = {"U": ("urbanos", "urbana"), "R": ("del campo", "rural"), "M": ("de secciones mixtas", "de secciones mixtas")}
+
+
+def sugerir_nombre(centroide: dict, edad: dict, tipo: dict, umbral_pct: float = 60.0, umbral_z: float = 0.5) -> str:
+    """Nombre sugerido (borrador para el equipo): sujeto por edad, territorio y uno o dos rasgos del centroide.
+
+    `centroide`: z-score por rasgo. `edad` y `tipo`: porcentaje de la lista nominal por grupo de edad y por U, M, R.
+    """
+    if sum(edad.get(g, 0.0) for g in EDAD_JOVEN) >= umbral_pct:
+        sujeto, plural = "Jóvenes", True
+    elif sum(edad.get(g, 0.0) for g in EDAD_MAYOR) >= umbral_pct:
+        sujeto, plural = "Mayores", True
+    else:
+        sujeto, plural = "Adultez", False
+    dominante = max(TERRITORIO, key=lambda t: tipo.get(t, 0.0))
+    partes = [sujeto]
+    if tipo.get(dominante, 0.0) >= umbral_pct:
+        partes.append(TERRITORIO[dominante][0 if plural else 1])
+    rasgos = sorted((r for r in dict.fromkeys(r for r, _ in FRASE_RASGO) if r in centroide), key=lambda r: -abs(centroide[r]))
+    elegidos = rasgos[:1] + [r for r in rasgos[1:2] if abs(centroide[r]) >= umbral_z]
+    elegidos.sort(key=lambda r: r != "nivel")   # «de baja participación y en retirada» se lee mejor con el nivel primero
+    frases = [FRASE_RASGO[(r, 1 if centroide[r] > 0 else -1)] for r in elegidos]
+    return " ".join(partes) + " " + " y ".join(frases)
+
+
+
+# Polos de los arquetipos (spec 004): frases sobre el voto, no sobre personas. Rasgo y signo que identifican a cada uno.
+FIRMA_POLOS = {"Voto presidencial": ("brecha", 1), "Voto parejo que baja": ("tendencia", -1),
+               "Voto que crece": ("tendencia", 1), "Voto firme": ("volatilidad", -1)}
+
+
+def nombrar_polos(z: dict[int, dict]) -> dict[int, str]:
+    """Nombre de cada arquetipo por su firma (el extremo de un rasgo) y no por su número, para no depender del orden."""
+    if len(z) != len(FIRMA_POLOS):
+        raise ValueError(f"se esperaban {len(FIRMA_POLOS)} arquetipos, llegaron {len(z)}")
+    nombres = {}
+    for nombre, (rasgo, signo) in FIRMA_POLOS.items():
+        j = max(z, key=lambda i: signo * z[i][rasgo])
+        if j in nombres:
+            raise ValueError(f"«{nombre}» y «{nombres[j]}» caen en el mismo arquetipo ({j}): revisar las firmas")
+        nombres[j] = nombre
+    return nombres
